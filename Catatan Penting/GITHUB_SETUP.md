@@ -74,10 +74,10 @@ Jalankan perintah berikut di terminal:
 
 ```bash
 # Konfigurasi nama (sesuaikan dengan nama Anda)
-git config --global user.name "Irman"
+git config --global user.name "irmanshidayat"
 
 # Konfigurasi email (gunakan email yang sama dengan GitHub)
-git config --global user.email "your.email@example.com"
+git config --global user.email "irmansyarifhidayat@gmail.com"
 
 # Konfigurasi line endings untuk Windows (untuk menghindari warning)
 git config --global core.autocrlf true
