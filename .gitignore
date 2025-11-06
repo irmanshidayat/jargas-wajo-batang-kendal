@@ -1,0 +1,57 @@
+# Environment Files
+.env
+.env.local
+.env.*
+!.env.example
+
+# Virtual Environment (Python)
+venv/
+env/
+ENV/
+.venv/
+backend/venv/
+backend/env/
+backend/.venv/
+
+# Node Modules (Frontend)
+node_modules/
+frontend/node_modules/
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyc
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Uploads (jika tidak ingin di-commit)
+backend/uploads/
+!backend/uploads/.gitkeep
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker (optional)
+.dockerignore

@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  # MySQL Database Service
+  mysql:
+    image: mysql:8.0
+    container_name: jargas_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      TZ: Asia/Jakarta
+    ports:
+      - "${DB_PORT_MAPPED:-3307}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - jargas_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  # Backend API Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: jargas_backend
+    restart: unless-stopped
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      SECRET_KEY: ${SECRET_KEY}
+      DEBUG: ${DEBUG:-False}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      AUTO_MIGRATE: ${AUTO_MIGRATE:-False}
+      AUTO_MIGRATE_ONLY_IF_PENDING: ${AUTO_MIGRATE_ONLY_IF_PENDING:-True}
+      TZ: Asia/Jakarta
+    ports:
+      - "${BACKEND_PORT_MAPPED:-8001}:8000"
+    volumes:
+      - backend_uploads:/app/uploads/evidence
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - jargas_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend Nginx Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: jargas_frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: /api/v1
+      TZ: Asia/Jakarta
+    ports:
+      - "${FRONTEND_PORT_MAPPED:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - jargas_network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+# Volumes untuk data persistence
+volumes:
+  mysql_data:
+    driver: local
+    name: jargas_mysql_data
+  backend_uploads:
+    driver: local
+    name: jargas_backend_uploads
+
+# Network untuk komunikasi antar services
+networks:
+  jargas_network:
+    driver: bridge
+    name: jargas_network
+
