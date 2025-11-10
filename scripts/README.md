@@ -181,11 +181,15 @@ export DB_PORT="3306"
 ./scripts/fix-missing-columns-vps.sh
 ```
 
-**Atau langsung jalankan SQL file:**
+**Atau langsung jalankan SQL file via Docker (jika MySQL client tidak terinstall):**
 
 ```bash
-# Di server VPS
-mysql -u root -p jargas_apbn < scripts/fix_missing_columns_vps.sql
+# Di server VPS (via Docker container)
+docker exec -i jargas_mysql mysql -uroot -padmin123 jargas_apbn < scripts/fix_missing_columns_vps.sql
+
+# Atau gunakan script khusus Docker
+chmod +x scripts/fix-missing-columns-vps-docker.sh
+./scripts/fix-missing-columns-vps-docker.sh
 ```
 
 **Parameter (PowerShell):**
