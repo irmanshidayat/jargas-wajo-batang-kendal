@@ -6,26 +6,43 @@ Create Date: 2025-01-15 10:00:00.000000
 
 """
 from typing import Sequence, Union
+import logging
 
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import inspect
 
+logger = logging.getLogger(__name__)
+
 
 # revision identifiers, used by Alembic.
 revision: str = '82b36e17b6fd'
-down_revision: Union[str, None] = 'add_surat_permohonan_stock_outs'
+down_revision: Union[str, None] = '80cb2c36260b'  # Setelah migration users
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    """
+    Migration untuk menambahkan multi-tenant support dengan projects
+    Pastikan tabel users sudah ada sebelum membuat user_projects
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     connection = op.get_bind()
     inspector = inspect(connection)
     existing_tables = inspector.get_table_names()
     
+    # CRITICAL: Pastikan tabel users sudah ada sebelum membuat user_projects
+    if 'users' not in existing_tables:
+        error_msg = "Tabel 'users' belum ada! Migration ini membutuhkan tabel users. Pastikan migration untuk membuat tabel users sudah dijalankan terlebih dahulu."
+        logger.error(f"❌ {error_msg}")
+        raise RuntimeError(error_msg)
+    
     # Create projects table if it doesn't exist
     if 'projects' not in existing_tables:
+        logger.info("Membuat tabel 'projects'...")
         op.create_table(
             'projects',
             sa.Column('id', sa.Integer(), nullable=False),
@@ -40,9 +57,19 @@ def upgrade() -> None:
         op.create_index(op.f('ix_projects_id'), 'projects', ['id'], unique=False)
         op.create_index(op.f('ix_projects_name'), 'projects', ['name'], unique=False)
         op.create_index(op.f('ix_projects_code'), 'projects', ['code'], unique=True)
+        logger.info("✅ Tabel 'projects' berhasil dibuat")
+    else:
+        logger.info("Tabel 'projects' sudah ada, skip")
 
     # Create user_projects table if it doesn't exist
+    # Pastikan tabel users dan projects sudah ada
     if 'user_projects' not in existing_tables:
+        if 'users' not in existing_tables:
+            raise RuntimeError("Tabel 'users' belum ada! Migration ini membutuhkan tabel users.")
+        if 'projects' not in existing_tables:
+            raise RuntimeError("Tabel 'projects' belum ada! Migration ini membutuhkan tabel projects.")
+        
+        logger.info("Membuat tabel 'user_projects'...")
         op.create_table(
             'user_projects',
             sa.Column('id', sa.Integer(), nullable=False),
@@ -60,6 +87,9 @@ def upgrade() -> None:
         op.create_index(op.f('ix_user_projects_id'), 'user_projects', ['id'], unique=False)
         op.create_index(op.f('ix_user_projects_user_id'), 'user_projects', ['user_id'], unique=False)
         op.create_index(op.f('ix_user_projects_project_id'), 'user_projects', ['project_id'], unique=False)
+        logger.info("✅ Tabel 'user_projects' berhasil dibuat")
+    else:
+        logger.info("Tabel 'user_projects' sudah ada, skip")
 
     # Helper function to add project_id column safely
     def add_project_id_safely(table_name: str):
@@ -67,12 +97,19 @@ def upgrade() -> None:
             existing_columns = [col['name'] for col in inspector.get_columns(table_name)]
             if 'project_id' not in existing_columns:
                 try:
+                    logger.info(f"Menambahkan kolom 'project_id' ke tabel '{table_name}'...")
                     op.add_column(table_name, sa.Column('project_id', sa.Integer(), nullable=True))
                     op.create_index(op.f(f'ix_{table_name}_project_id'), table_name, ['project_id'], unique=False)
-                    op.create_foreign_key(f'fk_{table_name}_project_id', table_name, 'projects', ['project_id'], ['id'])
-                except Exception:
+                    # Pastikan tabel projects sudah ada sebelum membuat foreign key
+                    if 'projects' in existing_tables:
+                        op.create_foreign_key(f'fk_{table_name}_project_id', table_name, 'projects', ['project_id'], ['id'])
+                    logger.info(f"✅ Kolom 'project_id' berhasil ditambahkan ke tabel '{table_name}'")
+                except Exception as e:
                     # Column, index, or foreign key might already exist
-                    pass
+                    logger.warning(f"⚠️  Warning saat menambahkan project_id ke {table_name}: {str(e)}")
+                    # Jangan raise error, lanjutkan migration
+            else:
+                logger.info(f"Kolom 'project_id' sudah ada di tabel '{table_name}', skip")
 
     # Add project_id to materials table (nullable untuk backward compatibility)
     add_project_id_safely('materials')
