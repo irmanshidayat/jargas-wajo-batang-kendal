@@ -6,7 +6,10 @@ import logging
 from pathlib import Path
 from alembic import command
 from alembic.config import Config
+from sqlalchemy import inspect, text
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from app.config.settings import settings
+from app.config.database import engine
 from app.utils.migration_manager import MigrationManager, MigrationMode
 
 logger = logging.getLogger(__name__)
@@ -136,6 +139,58 @@ def get_migration_info() -> dict:
             "error": str(e)
         }
 
+def check_database_empty() -> bool:
+    """
+    Cek apakah database kosong (tidak ada tabel sama sekali atau tidak ada tabel alembic_version)
+    
+    Returns:
+        bool: True jika database kosong, False jika sudah ada tabel
+    """
+    try:
+        with engine.connect() as connection:
+            # Cek apakah ada tabel alembic_version
+            inspector = inspect(engine)
+            tables = inspector.get_table_names()
+            
+            # Jika tidak ada tabel sama sekali, database kosong
+            if len(tables) == 0:
+                logger.info("Database kosong: tidak ada tabel sama sekali")
+                return True
+            
+            # Jika ada tabel tapi tidak ada alembic_version, berarti belum pernah migration
+            if "alembic_version" not in tables:
+                logger.info("Database kosong: tidak ada tabel alembic_version (belum pernah migration)")
+                return True
+            
+            # Cek apakah tabel alembic_version ada tapi kosong
+            try:
+                result = connection.execute(text("SELECT COUNT(*) as count FROM alembic_version"))
+                row = result.fetchone()
+                if row and row[0] == 0:
+                    logger.info("Database kosong: tabel alembic_version ada tapi kosong")
+                    return True
+            except (OperationalError, ProgrammingError) as e:
+                # Jika error saat query alembic_version, anggap database kosong
+                logger.warning(f"Error saat cek alembic_version: {str(e)}, anggap database kosong")
+                return True
+            
+            # Database tidak kosong
+            return False
+            
+    except (OperationalError, ProgrammingError) as e:
+        # Error koneksi atau database tidak ada
+        error_msg = str(e).lower()
+        if "doesn't exist" in error_msg or "unknown database" in error_msg:
+            logger.warning(f"Database {settings.DB_NAME} belum ada: {str(e)}")
+        else:
+            logger.warning(f"Error saat cek database empty: {str(e)}")
+        # Anggap database kosong jika error
+        return True
+    except Exception as e:
+        logger.error(f"Unexpected error saat cek database empty: {str(e)}", exc_info=True)
+        # Anggap database kosong jika error
+        return True
+
 def auto_migrate_safe(only_if_pending: bool = True) -> dict:
     """
     Jalankan auto-migrate dengan validasi dan safety checks (Best Practice)
@@ -143,11 +198,20 @@ def auto_migrate_safe(only_if_pending: bool = True) -> dict:
     
     Args:
         only_if_pending: Jika True, hanya migrate jika ada pending migration
+                        TAPI akan di-ignore jika database kosong (force migration)
     
     Returns:
         dict: Status hasil migration dengan detail
     """
     try:
+        # Cek apakah database kosong terlebih dahulu
+        is_database_empty = check_database_empty()
+        
+        # Jika database kosong, force migration meskipun only_if_pending=True
+        if is_database_empty:
+            logger.info("🔍 Database kosong terdeteksi, akan melakukan initial migration...")
+            only_if_pending = False  # Override untuk force migration
+        
         # Gunakan Migration Manager baru
         manager = MigrationManager()
         
@@ -161,27 +225,32 @@ def auto_migrate_safe(only_if_pending: bool = True) -> dict:
             "current_revision": status.get("current_revision"),
             "head_revision": status.get("head_revision"),
             "error": None,
-            "mode": manager.mode.value
+            "mode": manager.mode.value,
+            "is_database_empty": is_database_empty
         }
         
         # Cek apakah sudah up-to-date
-        if status.get("is_up_to_date"):
+        if status.get("is_up_to_date") and not is_database_empty:
             result["success"] = True
             result["migrated"] = False
             result["message"] = "Database sudah up-to-date, tidak ada migration yang perlu dijalankan"
             logger.info(f"Database sudah up-to-date (revision: {result['current_revision']})")
             return result
         
-        # Jika only_if_pending=True dan tidak ada pending, skip
-        if only_if_pending and not status.get("has_pending"):
+        # Jika only_if_pending=True dan tidak ada pending, skip (kecuali database kosong)
+        if only_if_pending and not status.get("has_pending") and not is_database_empty:
             result["success"] = True
             result["migrated"] = False
             result["message"] = "Tidak ada pending migration"
             logger.info("Tidak ada pending migration, skip auto-migrate")
             return result
         
-        # Jalankan migration menggunakan manager
-        logger.info(f"Memulai auto-migration dari {result['current_revision']} ke {result['head_revision']} (mode: {manager.mode.value})")
+        # Jika database kosong atau ada pending, jalankan migration
+        if is_database_empty:
+            logger.info(f"🚀 Memulai initial migration ke {result['head_revision']} (mode: {manager.mode.value})")
+        else:
+            logger.info(f"🔄 Memulai auto-migration dari {result['current_revision']} ke {result['head_revision']} (mode: {manager.mode.value})")
+        
         upgrade_result = manager.upgrade()
         
         # Map result dari manager ke format yang diharapkan
@@ -194,7 +263,10 @@ def auto_migrate_safe(only_if_pending: bool = True) -> dict:
             result["error"] = "; ".join(upgrade_result["errors"])
         
         if result["migrated"]:
-            logger.info(f"✅ {result['message']}")
+            if is_database_empty:
+                logger.info(f"✅ Initial migration berhasil: {result['message']}")
+            else:
+                logger.info(f"✅ Auto-migration berhasil: {result['message']}")
         else:
             logger.warning(f"⚠️ {result['message']}")
         
@@ -209,6 +281,7 @@ def auto_migrate_safe(only_if_pending: bool = True) -> dict:
             "message": f"Error saat auto-migrate: {error_msg}",
             "current_revision": None,
             "head_revision": None,
-            "error": error_msg
+            "error": error_msg,
+            "is_database_empty": False
         }
 

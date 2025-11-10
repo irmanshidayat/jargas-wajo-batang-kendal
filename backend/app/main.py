@@ -127,36 +127,80 @@ app.mount("/api/v1/evidence", StaticFiles(directory="uploads/evidence"), name="e
 async def startup_event():
     """
     Lifecycle hook untuk startup tasks:
-    1. Auto-migrate database (jika diaktifkan)
+    1. Auto-migrate database (jika diaktifkan) dengan retry logic
     2. Auto-generate pages dan permissions
     """
     # 1. Auto-migrate database (Best Practice: Controlled via environment variable)
     if settings.AUTO_MIGRATE:
-        try:
-            from app.utils.migration import auto_migrate_safe
-            migration_mode = settings.MIGRATION_MODE or "sequential"
-            logger.info(f"Auto-migrate diaktifkan (mode: {migration_mode}), memeriksa migration status...")
-            
-            result = auto_migrate_safe(only_if_pending=settings.AUTO_MIGRATE_ONLY_IF_PENDING)
-            
-            if result["success"]:
-                if result["migrated"]:
-                    mode_info = f" (mode: {result.get('mode', migration_mode)})" if result.get('mode') else ""
-                    logger.info(f"✅ Auto-migration berhasil{mode_info}: {result['message']}")
+        import asyncio
+        from sqlalchemy.exc import OperationalError
+        
+        max_retries = 3
+        retry_delay = 5  # detik
+        
+        for attempt in range(1, max_retries + 1):
+            try:
+                from app.utils.migration import auto_migrate_safe
+                migration_mode = settings.MIGRATION_MODE or "sequential"
+                
+                if attempt == 1:
+                    logger.info(f"Auto-migrate diaktifkan (mode: {migration_mode}), memeriksa migration status...")
                 else:
-                    logger.info(f"ℹ️ {result['message']}")
-            else:
-                logger.warning(f"⚠️ Auto-migration gagal: {result.get('message', 'Unknown error')}")
-                if result.get('error'):
-                    logger.warning(f"   Error detail: {result['error']}")
-                logger.warning("Aplikasi akan tetap berjalan, namun sebaiknya periksa migration secara manual")
+                    logger.info(f"Retry auto-migrate (attempt {attempt}/{max_retries})...")
+                
+                result = auto_migrate_safe(only_if_pending=settings.AUTO_MIGRATE_ONLY_IF_PENDING)
+                
+                if result["success"]:
+                    if result["migrated"]:
+                        mode_info = f" (mode: {result.get('mode', migration_mode)})" if result.get('mode') else ""
+                        if result.get("is_database_empty"):
+                            logger.info(f"✅ Initial migration berhasil{mode_info}: {result['message']}")
+                        else:
+                            logger.info(f"✅ Auto-migration berhasil{mode_info}: {result['message']}")
+                    else:
+                        logger.info(f"ℹ️ {result['message']}")
+                    break  # Berhasil, keluar dari retry loop
+                else:
+                    # Cek apakah error karena database belum ready
+                    error_msg = result.get('error', '').lower() if result.get('error') else ''
+                    is_connection_error = any(keyword in error_msg for keyword in [
+                        'connection', 'connect', 'operational', 'timeout', 
+                        'refused', 'unreachable', 'unknown database'
+                    ])
+                    
+                    if is_connection_error and attempt < max_retries:
+                        logger.warning(f"⚠️ Database belum ready (attempt {attempt}/{max_retries}), retry dalam {retry_delay} detik...")
+                        logger.warning(f"   Error: {result.get('error', 'Unknown error')}")
+                        await asyncio.sleep(retry_delay)
+                        continue
+                    else:
+                        logger.warning(f"⚠️ Auto-migration gagal: {result.get('message', 'Unknown error')}")
+                        if result.get('error'):
+                            logger.warning(f"   Error detail: {result['error']}")
+                        logger.warning("Aplikasi akan tetap berjalan, namun sebaiknya periksa migration secara manual")
+                        logger.warning("💡 Gunakan: python -m scripts.smart_migrate --status untuk cek status")
+                        break  # Keluar dari retry loop
+                    
+            except (OperationalError, ConnectionError) as e:
+                # Error koneksi database - retry
+                if attempt < max_retries:
+                    logger.warning(f"⚠️ Database connection error (attempt {attempt}/{max_retries}): {str(e)}")
+                    logger.warning(f"   Retry dalam {retry_delay} detik...")
+                    await asyncio.sleep(retry_delay)
+                    continue
+                else:
+                    logger.error(f"❌ Database connection error setelah {max_retries} attempts: {str(e)}")
+                    logger.warning("Application will continue despite auto-migrate error")
+                    logger.warning("⚠️ PERHATIAN: Periksa status migration database secara manual!")
+                    logger.warning("💡 Gunakan: python -m scripts.smart_migrate --status untuk cek status")
+                    break
+            except Exception as e:
+                # Jangan crash aplikasi jika auto-migrate gagal
+                logger.error(f"Error during auto-migrate: {str(e)}", exc_info=True)
+                logger.warning("Application will continue despite auto-migrate error")
+                logger.warning("⚠️ PERHATIAN: Periksa status migration database secara manual!")
                 logger.warning("💡 Gunakan: python -m scripts.smart_migrate --status untuk cek status")
-        except Exception as e:
-            # Jangan crash aplikasi jika auto-migrate gagal
-            logger.error(f"Error during auto-migrate: {str(e)}", exc_info=True)
-            logger.warning("Application will continue despite auto-migrate error")
-            logger.warning("⚠️ PERHATIAN: Periksa status migration database secara manual!")
-            logger.warning("💡 Gunakan: python -m scripts.smart_migrate --status untuk cek status")
+                break
     else:
         logger.info("Auto-migrate tidak diaktifkan (AUTO_MIGRATE=False). Gunakan script manual untuk migration.")
         logger.info("💡 Gunakan: python -m scripts.smart_migrate untuk migration manual")
