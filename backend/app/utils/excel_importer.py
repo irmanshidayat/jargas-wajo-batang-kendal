@@ -133,18 +133,14 @@ def validate_material_row(
     if kode_barang and len(kode_barang) > 100:
         return False, f"Row {row_num}: Kode Barang maksimal 100 karakter"
     
-    # Validasi kategori (opsional, tapi kalau ada harus dari list valid)
+    # Validasi kategori (opsional, jika tidak valid akan diabaikan)
     kategori = row.get('kategori', '').strip()
     if kategori:
         if len(kategori) > 100:
             return False, f"Row {row_num}: Kategori maksimal 100 karakter"
         
-        if valid_kategoris:
-            # Case insensitive comparison
-            kategori_upper = kategori.upper().strip()
-            valid_upper = [k.upper() for k in valid_kategoris]
-            if kategori_upper not in valid_upper:
-                return False, f"Row {row_num}: Kategori '{kategori}' tidak valid. Kategori yang valid: {', '.join(valid_kategoris)}"
+        # Kategori optional, jadi tidak perlu validasi ketat
+        # Jika tidak valid, akan diabaikan di bulk_create
     
     # Validasi harga (opsional, tapi kalau ada harus numerik dan >= 0)
     harga_str = row.get('harga', '').strip()

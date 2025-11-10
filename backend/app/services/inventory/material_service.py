@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from app.repositories.inventory import MaterialRepository
 from app.services.base import BaseService
 from app.core.exceptions import NotFoundError, ValidationError
+import logging
 
 
 # Valid kategori untuk material (berdasarkan image description)
@@ -24,6 +25,7 @@ class MaterialService(BaseService[MaterialRepository]):
     def __init__(self, db: Session):
         repository = MaterialRepository(db)
         super().__init__(repository, db)
+        self.logger = logging.getLogger(__name__)
 
     def get_all(self, skip: int = 0, limit: int = 100, project_id: int = None) -> tuple[List, int]:
         """
@@ -89,8 +91,8 @@ class MaterialService(BaseService[MaterialRepository]):
         return super().update(material_id, material_data, project_id=project_id)
 
     def delete(self, material_id: int, project_id: int = None) -> bool:
-        """Soft delete material - menggunakan BaseService.delete()"""
-        return super().delete(material_id, project_id=project_id, soft_delete=True)
+        """Hard delete material - benar-benar menghapus dari database"""
+        return super().delete(material_id, project_id=project_id, soft_delete=False)
 
     def bulk_create(self, materials_data: List[Dict[str, Any]], project_id: int) -> Dict[str, Any]:
         """
@@ -123,7 +125,9 @@ class MaterialService(BaseService[MaterialRepository]):
                 # Add project_id (required)
                 if project_id is None:
                     failed_count += 1
-                    errors.append(f"Row {row_num}: Project ID harus disertakan")
+                    error_msg = f"Row {row_num}: Project ID harus disertakan"
+                    errors.append(error_msg)
+                    self.logger.warning(error_msg)
                     continue
                 
                 material_data['project_id'] = project_id
@@ -136,19 +140,18 @@ class MaterialService(BaseService[MaterialRepository]):
                     # Check duplicate dalam file yang sama (dalam batch yang sama)
                     if kode_barang in processed_kodes:
                         failed_count += 1
-                        errors.append(f"Row {row_num}: Kode barang '{kode_barang}' duplikat dalam file")
+                        error_msg = f"Row {row_num}: Kode barang '{kode_barang}' duplikat dalam file"
+                        errors.append(error_msg)
+                        self.logger.warning(error_msg)
                         continue
                     
                     # Check duplicate di database (per project)
-                    if project_id is None:
-                        failed_count += 1
-                        errors.append(f"Row {row_num}: Project ID harus disertakan")
-                        continue
-                    
                     existing = self.repository.get_by_kode(kode_barang, project_id=project_id)
                     if existing:
                         failed_count += 1
-                        errors.append(f"Row {row_num}: Kode barang '{kode_barang}' sudah terdaftar di project ini")
+                        error_msg = f"Row {row_num}: Kode barang '{kode_barang}' sudah terdaftar di project ini"
+                        errors.append(error_msg)
+                        self.logger.warning(f"Row {row_num}: Kode barang '{kode_barang}' sudah ada di database (id: {existing.id})")
                         continue
                     
                     processed_kodes.add(kode_barang)
@@ -156,19 +159,22 @@ class MaterialService(BaseService[MaterialRepository]):
                     # Jika kode_barang kosong, biarkan null (sesuai requirement)
                     material_data['kode_barang'] = None
                 
-                # Kategori (optional, tapi harus valid jika ada)
+                # Kategori (optional, bisa null atau harus valid jika ada)
                 kategori = row.get('kategori', '').strip()
                 if kategori:
-                    # Validate kategori dari list valid
-                    kategori_upper = kategori.upper()
-                    if kategori_upper not in VALID_KATEGORIS:
-                        failed_count += 1
-                        errors.append(
-                            f"Row {row_num}: Kategori '{kategori}' tidak valid. "
-                            f"Kategori yang valid: {', '.join(VALID_KATEGORIS)}"
-                        )
-                        continue
-                    material_data['kategori'] = kategori_upper
+                    # Validate kategori dari list valid (case insensitive)
+                    kategori_upper = kategori.upper().strip()
+                    valid_upper = [k.upper() for k in VALID_KATEGORIS]
+                    if kategori_upper in valid_upper:
+                        # Find exact match dari VALID_KATEGORIS
+                        for valid_kategori in VALID_KATEGORIS:
+                            if valid_kategori.upper() == kategori_upper:
+                                material_data['kategori'] = valid_kategori
+                                break
+                    else:
+                        # Jika kategori tidak valid, set ke None (kategori optional)
+                        # Kategori optional, jadi tidak perlu error, hanya set ke None
+                        material_data['kategori'] = None
                 else:
                     material_data['kategori'] = None
                 
@@ -192,30 +198,56 @@ class MaterialService(BaseService[MaterialRepository]):
                 
                 # Create material
                 try:
+                    # Validasi nama_barang dan satuan tidak boleh kosong
+                    if not material_data.get('nama_barang'):
+                        failed_count += 1
+                        error_msg = f"Row {row_num}: Nama Barang wajib diisi"
+                        errors.append(error_msg)
+                        self.logger.warning(error_msg)
+                        continue
+                    
+                    if not material_data.get('satuan'):
+                        failed_count += 1
+                        error_msg = f"Row {row_num}: Satuan wajib diisi"
+                        errors.append(error_msg)
+                        self.logger.warning(error_msg)
+                        continue
+                    
+                    self.logger.info(f"Row {row_num}: Mencoba membuat material: {material_data}")
                     material = self.repository.create(material_data)
                     if material:
                         success_count += 1
+                        self.logger.info(f"Row {row_num}: Berhasil membuat material dengan id: {material.id}")
                     else:
                         failed_count += 1
-                        errors.append(f"Row {row_num}: Gagal membuat material '{material_data['nama_barang']}'")
+                        error_msg = f"Row {row_num}: Gagal membuat material '{material_data['nama_barang']}'"
+                        errors.append(error_msg)
+                        self.logger.error(error_msg)
                 except IntegrityError as ie:
                     # Handle duplicate entry error
                     failed_count += 1
                     error_msg = str(ie.orig) if hasattr(ie, 'orig') else str(ie)
+                    self.logger.error(f"Row {row_num}: IntegrityError - {error_msg}")
                     
                     if "Duplicate entry" in error_msg or "uq_material_project_kode" in error_msg:
                         kode = material_data.get('kode_barang', '')
-                        errors.append(f"Row {row_num}: Kode barang '{kode}' sudah terdaftar di project ini")
+                        error_msg = f"Row {row_num}: Kode barang '{kode}' sudah terdaftar di project ini"
+                        errors.append(error_msg)
                     else:
-                        errors.append(f"Row {row_num}: Error - {error_msg}")
+                        error_msg = f"Row {row_num}: Error database - {error_msg}"
+                        errors.append(error_msg)
+                except Exception as db_error:
+                    # Handle other database errors
+                    failed_count += 1
+                    error_msg = f"Row {row_num}: Error membuat material - {str(db_error)}"
+                    errors.append(error_msg)
+                    self.logger.error(f"Row {row_num}: Database error - {str(db_error)}", exc_info=True)
                     
             except Exception as e:
                 failed_count += 1
-                error_msg = str(e)
-                if "kode_barang" in error_msg.lower() and "sudah terdaftar" in error_msg.lower():
-                    errors.append(f"Row {row_num}: {error_msg}")
-                else:
-                    errors.append(f"Row {row_num}: Error - {error_msg}")
+                error_msg = f"Row {row_num}: Error memproses data - {str(e)}"
+                errors.append(error_msg)
+                self.logger.error(f"Row {row_num}: Exception - {str(e)}", exc_info=True)
         
         return {
             'success_count': success_count,

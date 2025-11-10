@@ -71,6 +71,7 @@ export const API_ENDPOINTS = {
       GET_BY_ID: (id: number) => `/inventory/materials/${id}`,
       CREATE: '/inventory/materials',
       UPDATE: (id: number) => `/inventory/materials/${id}`,
+      DELETE: (id: number) => `/inventory/materials/${id}`,
       BULK_IMPORT: '/inventory/materials/bulk-import',
       TEMPLATE: '/inventory/materials-template',
       UNIQUE_SATUANS: '/inventory/materials/unique/satuans',

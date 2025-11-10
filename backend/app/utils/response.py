@@ -28,7 +28,8 @@ def success_response(
 def error_response(
     message: str = "Terjadi kesalahan",
     status_code: int = status.HTTP_400_BAD_REQUEST,
-    errors: Optional[Dict[str, Any]] = None
+    errors: Optional[Dict[str, Any]] = None,
+    detail: Optional[str] = None
 ) -> JSONResponse:
     """Format response untuk operasi error"""
     content = {
@@ -38,6 +39,9 @@ def error_response(
     
     if errors:
         content["errors"] = errors
+    
+    if detail:
+        content["detail"] = detail
     
     return JSONResponse(status_code=status_code, content=jsonable_encoder(content))
 

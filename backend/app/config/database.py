@@ -2,6 +2,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from app.config.settings import settings
+import logging
+
+# Konfigurasi logging untuk SQLAlchemy - hanya tampilkan ERROR dan WARNING
+logging.getLogger('sqlalchemy.engine').setLevel(logging.ERROR)
+logging.getLogger('sqlalchemy.pool').setLevel(logging.ERROR)
+logging.getLogger('sqlalchemy.dialects').setLevel(logging.ERROR)
 
 # Database URL
 # Handle connection with or without password
@@ -16,12 +22,12 @@ else:
         f"@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
     )
 
-# Create engine
+# Create engine - echo=False untuk mengurangi verbose log
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
     pool_recycle=300,
-    echo=settings.DEBUG,
+    echo=False,  # Nonaktifkan SQL query logging untuk mengurangi verbose
 )
 
 # Create SessionLocal class

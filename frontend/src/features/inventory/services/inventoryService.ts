@@ -413,6 +413,11 @@ export const inventoryService = {
     return extractData(response)
   },
 
+  deleteMaterial: async (id: number) => {
+    const response = await apiClient.delete(API_ENDPOINTS.INVENTORY.MATERIALS.DELETE(id))
+    return extractData(response)
+  },
+
   bulkImportMaterials: async (file: File) => {
     const formData = buildFormData({ file })
     const response = await apiClient.post(API_ENDPOINTS.INVENTORY.MATERIALS.BULK_IMPORT, formData, {

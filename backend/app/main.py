@@ -13,7 +13,27 @@ from app.core.exceptions import (
 )
 from app.utils.response import error_response
 import logging
+import sys
 from fastapi.staticfiles import StaticFiles
+
+# Konfigurasi logging - hanya tampilkan yang penting
+logging.basicConfig(
+    level=logging.INFO if settings.DEBUG else logging.WARNING,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
+# Set level untuk SQLAlchemy - hanya ERROR dan WARNING
+logging.getLogger('sqlalchemy.engine').setLevel(logging.ERROR)
+logging.getLogger('sqlalchemy.pool').setLevel(logging.ERROR)
+logging.getLogger('sqlalchemy.dialects').setLevel(logging.ERROR)
+logging.getLogger('sqlalchemy.orm').setLevel(logging.ERROR)
+
+# Set level untuk uvicorn - hanya tampilkan yang penting
+logging.getLogger('uvicorn.access').setLevel(logging.WARNING)
+logging.getLogger('uvicorn.error').setLevel(logging.INFO)
 
 logger = logging.getLogger(__name__)
 
@@ -100,19 +120,45 @@ async def integrity_error_handler(request: Request, exc: IntegrityError):
 
 @app.exception_handler(SQLAlchemyError)
 async def sqlalchemy_error_handler(request: Request, exc: SQLAlchemyError):
-    logger.error(f"Database Error: {str(exc)}")
+    error_detail = {
+        "error": str(exc),
+        "type": type(exc).__name__,
+        "path": request.url.path,
+        "method": request.method,
+    }
+    logger.error(f"Database Error: {error_detail}", exc_info=settings.DEBUG)
+    
+    error_message = "Terjadi kesalahan pada database"
+    if settings.DEBUG:
+        error_message = f"{error_message}: {str(exc)}"
+    
     return error_response(
-        message="Terjadi kesalahan pada database",
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        message=error_message,
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=str(exc) if settings.DEBUG else None
     )
 
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Unexpected Error: {str(exc)}", exc_info=True)
+    # Log error dengan detail lengkap untuk debugging
+    error_detail = {
+        "error": str(exc),
+        "type": type(exc).__name__,
+        "path": request.url.path,
+        "method": request.method,
+    }
+    logger.error(f"Unexpected Error: {error_detail}", exc_info=settings.DEBUG)
+    
+    # Return error response dengan detail jika DEBUG mode
+    error_message = "Terjadi kesalahan pada server"
+    if settings.DEBUG:
+        error_message = f"{error_message}: {str(exc)}"
+    
     return error_response(
-        message="Terjadi kesalahan pada server",
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        message=error_message,
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=str(exc) if settings.DEBUG else None
     )
 
 

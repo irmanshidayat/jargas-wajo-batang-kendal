@@ -37,3 +37,5 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_surat_permintaans_status'), table_name='surat_permintaans')
     op.drop_column('surat_permintaans', 'status')
 
+
+

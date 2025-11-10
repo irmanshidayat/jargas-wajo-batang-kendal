@@ -89,3 +89,5 @@ def analyze_migrations():
 if __name__ == "__main__":
     analyze_migrations()
 
+
+

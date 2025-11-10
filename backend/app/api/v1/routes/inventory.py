@@ -219,6 +219,68 @@ async def update_material(
     )
 
 
+@router.delete(
+    "/materials/{material_id}",
+    response_model=None,
+    status_code=status.HTTP_200_OK,
+    summary="Delete material",
+    tags=["Materials"]
+)
+async def delete_material(
+    material_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    project_id: int = Depends(get_current_project)
+):
+    """Delete material (hard delete - benar-benar menghapus dari database)"""
+    check_role_permission(current_user, [UserRole.ADMIN, UserRole.GUDANG])
+    
+    material_service = MaterialService(db)
+    
+    try:
+        # Get material before delete for audit log
+        material = material_service.get_by_id(material_id, project_id=project_id)
+        
+        # Delete material (hard delete)
+        material_service.delete(material_id, project_id=project_id)
+        
+        # Audit log
+        audit_service = AuditLogService(db)
+        audit_service.create_log(
+            user_id=current_user.id,
+            action=ActionType.DELETE,
+            table_name="materials",
+            record_id=material_id,
+            old_values={"kode_barang": material.kode_barang, "nama_barang": material.nama_barang},
+            description=f"Delete material ID: {material_id} - {material.nama_barang}"
+        )
+        
+        return success_response(
+            data=None,
+            message="Material berhasil dihapus"
+        )
+    except IntegrityError as e:
+        logger.error(f"Integrity error in delete_material: {str(e)}", exc_info=True)
+        db.rollback()
+        error_msg = str(e)
+        if "foreign key constraint" in error_msg.lower():
+            return error_response(
+                message="Material tidak dapat dihapus karena masih digunakan di data lain (stock in, stock out, installed, return, atau surat permintaan). Hapus data terkait terlebih dahulu.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        return error_response(
+            message=f"Gagal menghapus material: {error_msg}",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+    except SQLAlchemyError as e:
+        logger.error(f"Database error in delete_material: {str(e)}", exc_info=True)
+        db.rollback()
+        return error_response(
+            message="Terjadi kesalahan saat menghapus material",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
 @router.post(
     "/materials",
     response_model=None,
@@ -354,12 +416,19 @@ async def bulk_import_materials(
             )
         
         # Bulk create materials
+        logger.info(f"Bulk import: {len(validated_rows)} rows validated, {len(validation_errors)} validation errors")
         result = material_service.bulk_create(validated_rows, project_id=project_id)
+        logger.info(f"Bulk import result: {result['success_count']} sukses, {result['failed_count']} gagal, {len(result['errors'])} errors")
         
         # Tambahkan validation errors ke result errors
         if validation_errors:
             result['errors'].extend(validation_errors)
             result['failed_count'] += len(validation_errors)
+            logger.info(f"Added {len(validation_errors)} validation errors to result")
+        
+        # Log semua errors untuk debugging
+        if result['errors']:
+            logger.warning(f"Bulk import errors: {result['errors']}")
         
         # Audit log
         audit_service = AuditLogService(db)

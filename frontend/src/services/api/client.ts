@@ -45,14 +45,23 @@ apiClient.interceptors.response.use(
     if (error.response) {
       const status = error.response.status
       const responseData = error.response.data as any
+      const url = error.config?.url || 'unknown'
 
-      // Log error untuk debugging
-      console.error('API Error:', {
-        status,
-        url: error.config?.url,
-        data: responseData,
-        errors: responseData?.errors
-      })
+      // Log error untuk debugging dengan detail lengkap di console browser
+      console.group('🚨 API Error')
+      console.error('Status:', status)
+      console.error('URL:', url)
+      console.error('Method:', error.config?.method?.toUpperCase())
+      console.error('Base URL:', error.config?.baseURL)
+      console.error('Response Data:', responseData)
+      if (responseData?.errors) {
+        console.error('Validation Errors:', responseData.errors)
+      }
+      if (responseData?.detail) {
+        console.error('Error Detail:', responseData.detail)
+      }
+      console.error('Full Error Object:', error)
+      console.groupEnd()
 
       if (status === 401) {
         localStorage.removeItem('token')
@@ -73,7 +82,10 @@ apiClient.interceptors.response.use(
           ? Object.entries(errors).map(([key, value]) => `${key}: ${value}`).join('\n')
           : errorMessage
         
-        console.error('Validation Error Details:', errors)
+        console.group('⚠️ Validation Error')
+        console.error('Errors:', errors)
+        console.error('Full Response:', responseData)
+        console.groupEnd()
         await Swal.fire({
           icon: 'error',
           title: 'Validasi Gagal',
@@ -81,18 +93,81 @@ apiClient.interceptors.response.use(
           confirmButtonText: 'OK',
         })
       } else if (status >= 500) {
+        // Server Error - tampilkan detail error jika ada
+        const errorMessage = responseData?.message || responseData?.detail || 'Terjadi kesalahan pada server'
+        const errorDetail = responseData?.detail || responseData?.error || 'Silakan coba lagi nanti atau hubungi administrator'
+        
+        console.group('❌ Server Error (500+)')
+        console.error('Message:', errorMessage)
+        console.error('Detail:', errorDetail)
+        console.error('URL:', url)
+        console.error('Full Response:', responseData)
+        console.error('Full Error:', error)
+        console.groupEnd()
+
         await Swal.fire({
           icon: 'error',
-          title: 'Error Server',
-          text: 'Terjadi kesalahan pada server. Silakan coba lagi nanti.',
+          title: 'Error Server (500)',
+          html: `
+            <div style="text-align: left;">
+              <p><strong>Pesan:</strong> ${errorMessage}</p>
+              <p><strong>Detail:</strong> ${errorDetail}</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #666;">
+                URL: ${url}<br/>
+                Periksa console browser untuk detail lebih lengkap.
+              </p>
+            </div>
+          `,
           confirmButtonText: 'OK',
+          width: '600px'
         })
       }
     } else if (error.request) {
+      // Request dibuat tapi tidak ada response (connection error)
+      const isConnectionRefused = error.code === 'ECONNREFUSED' || 
+                                   error.message?.includes('ECONNREFUSED') ||
+                                   error.message?.includes('Network Error')
+      
+      const errorMessage = isConnectionRefused
+        ? 'Backend server tidak berjalan atau tidak dapat diakses. Pastikan backend server sudah berjalan di port 8000 atau 8001.'
+        : 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda atau pastikan server sudah berjalan.'
+
+      console.group('🔌 Connection Error')
+      console.error('Code:', error.code)
+      console.error('Message:', error.message)
+      console.error('URL:', error.config?.url)
+      console.error('Base URL:', error.config?.baseURL)
+      console.error('Full Error:', error)
+      console.groupEnd()
+
       await Swal.fire({
         icon: 'error',
         title: 'Tidak Ada Koneksi',
-        text: 'Periksa koneksi internet Anda.',
+        html: `
+          <div style="text-align: left;">
+            <p>${errorMessage}</p>
+            <p style="margin-top: 10px; font-size: 12px; color: #666;">
+              <strong>Tips:</strong><br/>
+              • Jika menggunakan Docker: jalankan <code>docker-compose up -d backend</code><br/>
+              • Jika tidak menggunakan Docker: jalankan <code>python run.py</code> di folder backend<br/>
+              • Pastikan backend berjalan di port 8000 atau 8001
+            </p>
+          </div>
+        `,
+        confirmButtonText: 'OK',
+        width: '600px'
+      })
+    } else {
+      // Error lainnya
+      console.group('❓ Unknown Error')
+      console.error('Error:', error)
+      console.error('Message:', error.message)
+      console.error('Stack:', error.stack)
+      console.groupEnd()
+      await Swal.fire({
+        icon: 'error',
+        title: 'Terjadi Kesalahan',
+        text: error.message || 'Terjadi kesalahan yang tidak diketahui. Periksa console untuk detail.',
         confirmButtonText: 'OK',
       })
     }
