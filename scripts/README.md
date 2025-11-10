@@ -138,6 +138,70 @@ bash scripts/run-migration-server.sh ~/custom-path
 
 ---
 
+### `fix-missing-columns-vps.ps1` / `fix-missing-columns-vps.sh`
+
+Script untuk memperbaiki kolom yang missing di database VPS. Script ini menambahkan kolom-kolom yang diperlukan agar fitur DELETE user berfungsi dengan baik.
+
+**Masalah yang diperbaiki:**
+- Error: `Unknown column 'surat_permintaans.status' in 'field list'`
+- Error: `Unknown column 'surat_jalans.nomor_surat_permintaan' in 'field list'`
+- Error: `Unknown column 'surat_jalans.nomor_barang_keluar' in 'field list'`
+- Error: `Unknown column 'surat_jalans.stock_out_id' in 'field list'`
+
+**Kolom yang ditambahkan:**
+- `surat_permintaans.status` (VARCHAR(50), NOT NULL, DEFAULT 'Draft') dengan index
+- `surat_jalans.nomor_surat_permintaan` (VARCHAR(255), NULL) dengan index
+- `surat_jalans.nomor_barang_keluar` (VARCHAR(255), NULL) dengan index
+- `surat_jalans.stock_out_id` (INT, NULL) dengan index dan foreign key
+
+**Cara Menggunakan (PowerShell - Windows):**
+
+```powershell
+# Dari root project
+.\scripts\fix-missing-columns-vps.ps1
+
+# Dengan custom database settings
+.\scripts\fix-missing-columns-vps.ps1 -DbHost "localhost" -DbUser "root" -DbPassword "password" -DbName "jargas_apbn" -DbPort 3306
+```
+
+**Cara Menggunakan (Bash - Linux VPS):**
+
+```bash
+# Di server VPS via SSH
+cd ~/jargas-wajo-batang-kendal
+chmod +x scripts/fix-missing-columns-vps.sh
+./scripts/fix-missing-columns-vps.sh
+
+# Atau dengan environment variables
+export DB_HOST="localhost"
+export DB_USER="root"
+export DB_PASSWORD="password"
+export DB_NAME="jargas_apbn"
+export DB_PORT="3306"
+./scripts/fix-missing-columns-vps.sh
+```
+
+**Atau langsung jalankan SQL file:**
+
+```bash
+# Di server VPS
+mysql -u root -p jargas_apbn < scripts/fix_missing_columns_vps.sql
+```
+
+**Parameter (PowerShell):**
+- `-DbHost` (Optional): Database host (default: "localhost")
+- `-DbUser` (Optional): Database user (default: "root")
+- `-DbPassword` (Optional): Database password (default: "")
+- `-DbName` (Optional): Database name (default: "jargas_apbn")
+- `-DbPort` (Optional): Database port (default: 3306)
+
+**Catatan:**
+- Script ini aman dijalankan berkali-kali (idempotent) - akan mengecek apakah kolom sudah ada sebelum menambahkan
+- Tidak akan menghapus data yang sudah ada
+- Pastikan backup database sebelum menjalankan script (best practice)
+
+---
+
 ## 📚 Dokumentasi Lengkap
 
 Untuk dokumentasi lengkap, lihat:
