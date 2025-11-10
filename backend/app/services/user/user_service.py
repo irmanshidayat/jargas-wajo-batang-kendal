@@ -179,7 +179,7 @@ class UserService:
         return self.get_by_id(user_id)
 
     def delete(self, user_id: int) -> bool:
-        """Delete user"""
+        """Delete user dengan menangani foreign key constraints"""
         user = self.repository.get(user_id)
         if not user:
             raise NotFoundError(f"User dengan ID {user_id} tidak ditemukan")
@@ -188,6 +188,69 @@ class UserService:
         if user.is_superuser:
             raise ForbiddenError("Tidak dapat menghapus superuser")
         
+        # Cari superuser pertama sebagai fallback untuk foreign key yang tidak nullable
+        fallback_user = self.db.query(self.repository.model).filter(
+            self.repository.model.is_superuser == True,
+            self.repository.model.id != user_id
+        ).first()
+        
+        if not fallback_user:
+            # Jika tidak ada superuser lain, cari user aktif pertama
+            fallback_user = self.db.query(self.repository.model).filter(
+                self.repository.model.id != user_id,
+                self.repository.model.is_active == True
+            ).first()
+        
+        if not fallback_user:
+            raise ValidationError("Tidak dapat menghapus user: tidak ada user lain yang dapat digunakan sebagai fallback")
+        
+        fallback_user_id = fallback_user.id
+        
+        # Update semua foreign key yang merujuk ke user ini
+        # StockIn
+        from app.models.inventory.stock_in import StockIn
+        self.db.query(StockIn).filter(StockIn.created_by == user_id).update({"created_by": fallback_user_id})
+        self.db.query(StockIn).filter(StockIn.updated_by == user_id).update({"updated_by": None})
+        self.db.query(StockIn).filter(StockIn.deleted_by == user_id).update({"deleted_by": None})
+        
+        # StockOut
+        from app.models.inventory.stock_out import StockOut
+        self.db.query(StockOut).filter(StockOut.created_by == user_id).update({"created_by": fallback_user_id})
+        self.db.query(StockOut).filter(StockOut.updated_by == user_id).update({"updated_by": None})
+        self.db.query(StockOut).filter(StockOut.deleted_by == user_id).update({"deleted_by": None})
+        
+        # Installed
+        from app.models.inventory.installed import Installed
+        self.db.query(Installed).filter(Installed.created_by == user_id).update({"created_by": fallback_user_id})
+        self.db.query(Installed).filter(Installed.updated_by == user_id).update({"updated_by": None})
+        self.db.query(Installed).filter(Installed.deleted_by == user_id).update({"deleted_by": None})
+        
+        # Return
+        from app.models.inventory.return_model import Return
+        self.db.query(Return).filter(Return.created_by == user_id).update({"created_by": fallback_user_id})
+        self.db.query(Return).filter(Return.updated_by == user_id).update({"updated_by": None})
+        self.db.query(Return).filter(Return.deleted_by == user_id).update({"deleted_by": None})
+        
+        # SuratPermintaan
+        from app.models.inventory.surat_permintaan import SuratPermintaan
+        self.db.query(SuratPermintaan).filter(SuratPermintaan.created_by == user_id).update({"created_by": fallback_user_id})
+        self.db.query(SuratPermintaan).filter(SuratPermintaan.updated_by == user_id).update({"updated_by": None})
+        self.db.query(SuratPermintaan).filter(SuratPermintaan.deleted_by == user_id).update({"deleted_by": None})
+        
+        # SuratJalan
+        from app.models.inventory.surat_jalan import SuratJalan
+        self.db.query(SuratJalan).filter(SuratJalan.created_by == user_id).update({"created_by": fallback_user_id})
+        self.db.query(SuratJalan).filter(SuratJalan.updated_by == user_id).update({"updated_by": None})
+        self.db.query(SuratJalan).filter(SuratJalan.deleted_by == user_id).update({"deleted_by": None})
+        
+        # AuditLog
+        from app.models.inventory.audit_log import AuditLog
+        self.db.query(AuditLog).filter(AuditLog.user_id == user_id).update({"user_id": fallback_user_id})
+        
+        # Commit perubahan foreign key
+        self.db.commit()
+        
+        # Sekarang baru hapus user
         result = self.repository.delete(user_id)
         if not result:
             raise ValidationError("Gagal menghapus user")
