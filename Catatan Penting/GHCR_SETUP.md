@@ -103,7 +103,7 @@ Contoh:
 # Ganti dengan token dan username GitHub Anda
 # Pastikan variabel sudah di-set
 $GITHUB_USERNAME = "irmanshidayat"
-$GITHUB_TOKEN = "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+$GITHUB_TOKEN = "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  # Ganti dengan token Anda
 
 # Login ke GHCR
 echo $GITHUB_TOKEN | docker login ghcr.io -u $GITHUB_USERNAME --password-stdin
