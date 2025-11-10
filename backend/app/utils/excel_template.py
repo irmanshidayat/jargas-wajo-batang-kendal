@@ -20,14 +20,14 @@ LEFT_ALIGN = Alignment(horizontal="left", vertical="center")
 def create_material_import_template() -> BytesIO:
     """
     Create template Excel file untuk import materials
-    Format: NO, NAMA BARANG, KODE BARANG, SATUAN, KATEGORI
+    Format: NO, NAMA BARANG, KODE BARANG, SATUAN, KATEGORI, HARGA
     """
     wb = Workbook()
     ws = wb.active
     ws.title = "Template Import Material"
     
     # Headers
-    headers = ["NO", "NAMA BARANG", "KODE BARANG", "SATUAN", "KATEGORI"]
+    headers = ["NO", "NAMA BARANG", "KODE BARANG", "SATUAN", "KATEGORI", "HARGA"]
     
     # Write headers di row 1
     for col, header in enumerate(headers, 1):
@@ -39,13 +39,13 @@ def create_material_import_template() -> BytesIO:
     
     # Contoh data (row 2-4)
     example_data = [
-        [1, "PIPA PE 125mm", "PE125", "M", "PIPA DITRIBUSI"],
-        [2, "PIPA PE 63MM", "PE63", "M", "PIPA DITRIBUSI"],
-        [3, "EQUALTEE 63mm", "EQ63", "PCS", "PIPA DITRIBUSI"],
-        [4, "Regulator RT", "REG-RT", "PCS", "BUNGAN RUMAH"],
-        [5, "Meter Rumah Tangga G 1.6", "MTR-RT", "PCS", "BUNGAN RUMAH"],
-        [6, "Ball Valves 3/4\" Gas Specification", "BV-34", "PCS", "BUNGAN KOMPOR"],
-        [7, "Slang 1/2\"", "SLG-12", "M", "BUNGAN KOMPOR"],
+        [1, "PIPA PE 125mm", "PE125", "M", "PIPA DITRIBUSI", 150000],
+        [2, "PIPA PE 63MM", "PE63", "M", "PIPA DITRIBUSI", 120000],
+        [3, "EQUALTEE 63mm", "EQ63", "PCS", "PIPA DITRIBUSI", 85000],
+        [4, "Regulator RT", "REG-RT", "PCS", "BUNGAN RUMAH", 250000],
+        [5, "Meter Rumah Tangga G 1.6", "MTR-RT", "PCS", "BUNGAN RUMAH", 350000],
+        [6, "Ball Valves 3/4\" Gas Specification", "BV-34", "PCS", "BUNGAN KOMPOR", 180000],
+        [7, "Slang 1/2\"", "SLG-12", "M", "BUNGAN KOMPOR", 45000],
     ]
     
     # Write example data
@@ -66,6 +66,7 @@ def create_material_import_template() -> BytesIO:
         'C': 20,  # KODE BARANG
         'D': 12,  # SATUAN
         'E': 20,  # KATEGORI
+        'F': 15,  # HARGA
     }
     
     for col_letter, width in column_widths.items():
@@ -73,14 +74,15 @@ def create_material_import_template() -> BytesIO:
     
     # Add note/info di bawah data (optional)
     info_row = len(example_data) + 3
-    ws.merge_cells(f'A{info_row}:E{info_row + 3}')
+    ws.merge_cells(f'A{info_row}:F{info_row + 3}')
     info_cell = ws.cell(row=info_row, column=1)
     info_cell.value = (
         "PETUNJUK:\n"
         "1. Jangan hapus atau ubah header di row pertama\n"
         "2. Isi data mulai dari row kedua\n"
-        "3. Kolom KODE BARANG dan KATEGORI boleh dikosongkan\n"
-        "4. Kategori yang valid: PIPA DITRIBUSI, BUNGAN RUMAH, BUNGAN KOMPOR"
+        "3. Kolom KODE BARANG, KATEGORI, dan HARGA boleh dikosongkan\n"
+        "4. Kategori yang valid: PIPA DITRIBUSI, BUNGAN RUMAH, BUNGAN KOMPOR\n"
+        "5. HARGA harus berupa angka (contoh: 150000 atau 150000.50)"
     )
     info_cell.font = Font(size=9, italic=True, color="666666")
     info_cell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)

@@ -65,6 +65,6 @@ docker-compose*.yml
 *.md
 README*
 
-# Scripts (tidak perlu di production container)
-scripts/
+# Scripts - Diperlukan untuk auto-generate pages
+# scripts/
 

@@ -108,7 +108,7 @@ export default function MaterialSelector({
       />
       
       {isOpen && !disabled && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg max-h-60 overflow-auto">
+        <div className="absolute z-[9999] w-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg max-h-60 overflow-auto">
           {filteredMaterials.length > 0 ? (
             <ul className="py-1">
               {filteredMaterials.map((material) => (

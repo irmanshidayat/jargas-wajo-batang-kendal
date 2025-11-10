@@ -7,6 +7,7 @@ from app.repositories.inventory.return_repository import ReturnRepository
 from app.repositories.inventory.notification_repository import NotificationRepository
 from app.repositories.inventory.audit_log_repository import AuditLogRepository
 from app.repositories.inventory.surat_permintaan_repository import SuratPermintaanRepository
+from app.repositories.inventory.surat_jalan_repository import SuratJalanRepository
 
 __all__ = [
     "MaterialRepository",
@@ -18,5 +19,6 @@ __all__ = [
     "NotificationRepository",
     "AuditLogRepository",
     "SuratPermintaanRepository",
+    "SuratJalanRepository",
 ]
 

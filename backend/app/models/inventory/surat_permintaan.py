@@ -12,6 +12,7 @@ class SuratPermintaan(BaseModel):
     nomor_surat = Column(String(255), unique=True, nullable=False, index=True)  # JRGS-KDL-YYYYMMDD-XXXX
     tanggal = Column(Date, nullable=False, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    status = Column(String(50), nullable=False, default='Draft', index=True)  # Draft, Barang Keluar Dibuat, Selesai
     signatures = Column(Text, nullable=True)  # JSON untuk menyimpan semua signature data
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)

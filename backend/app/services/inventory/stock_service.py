@@ -227,6 +227,18 @@ class StockService:
             stock_out_data["project_id"] = project_id
         
         stock_out = self._create_stock_out_with_retry(stock_out_data, tanggal_keluar)
+        
+        # Update status surat permintaan jika nomor_surat_permintaan diisi
+        if nomor_surat_permintaan:
+            try:
+                self.surat_permintaan_service.update_status(
+                    nomor_surat=nomor_surat_permintaan,
+                    status="Barang Keluar Dibuat",
+                    project_id=project_id
+                )
+            except Exception as e:
+                self.logger.warning(f"Gagal update status surat permintaan {nomor_surat_permintaan}: {str(e)}")
+        
         return stock_out
 
     def create_installed(
@@ -1022,6 +1034,17 @@ class StockService:
 
         if failed_items:
             self.logger.warning(f"Some items failed: {failed_items}")
+        
+        # Update status surat permintaan jika nomor_surat_permintaan diisi dan ada record yang berhasil dibuat
+        if nomor_surat_permintaan and created_records:
+            try:
+                self.surat_permintaan_service.update_status(
+                    nomor_surat=nomor_surat_permintaan,
+                    status="Barang Keluar Dibuat",
+                    project_id=project_id
+                )
+            except Exception as e:
+                self.logger.warning(f"Gagal update status surat permintaan {nomor_surat_permintaan}: {str(e)}")
             
         self.logger.info(f"Successfully created {len(created_records)}/{len(normalized)} stock_out records")
         return created_records

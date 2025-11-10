@@ -161,7 +161,7 @@ Output yang diharapkan:
 
 ```bash
 # Tambahkan remote repository (ganti dengan URL repository Anda)
-git remote add origin https://github.com/username/jargas-apbn.git
+git remote add origin https://github.com/irmanshidayat/jargas-wajo-batang-kendal.git
 
 # Verifikasi remote
 git remote -v

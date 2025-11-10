@@ -32,3 +32,4 @@ class User(BaseModel):
     created_returns = relationship("Return", foreign_keys="Return.created_by", back_populates="creator")
     audit_logs = relationship("AuditLog", foreign_keys="AuditLog.user_id", back_populates="user")
     created_surat_permintaans = relationship("SuratPermintaan", foreign_keys="SuratPermintaan.created_by", back_populates="creator")
+    created_surat_jalans = relationship("SuratJalan", foreign_keys="SuratJalan.created_by", back_populates="creator")

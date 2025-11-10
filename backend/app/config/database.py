@@ -4,10 +4,17 @@ from sqlalchemy.orm import sessionmaker
 from app.config.settings import settings
 
 # Database URL
-DATABASE_URL = (
-    f"mysql+pymysql://{settings.DB_USER}:{settings.DB_PASSWORD}"
-    f"@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
-)
+# Handle connection with or without password
+if settings.DB_PASSWORD:
+    DATABASE_URL = (
+        f"mysql+pymysql://{settings.DB_USER}:{settings.DB_PASSWORD}"
+        f"@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
+    )
+else:
+    DATABASE_URL = (
+        f"mysql+pymysql://{settings.DB_USER}"
+        f"@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
+    )
 
 # Create engine
 engine = create_engine(

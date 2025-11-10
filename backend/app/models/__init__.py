@@ -1,5 +1,4 @@
 from app.models.base import Base
-from app.config.database import engine
 
 # Import all models here to ensure they are registered with SQLAlchemy
 from app.models.user.user import User
@@ -20,5 +19,6 @@ from app.models.inventory import (
     AuditLog,
 )
 
-# Create tables
-Base.metadata.create_all(bind=engine)
+# Note: Table creation sekarang dilakukan via Alembic migrations, bukan di sini
+# Base.metadata.create_all(bind=engine) telah dihapus untuk menghindari
+# koneksi database yang tidak perlu saat import models

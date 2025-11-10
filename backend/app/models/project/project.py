@@ -22,4 +22,5 @@ class Project(BaseModel):
     returns = relationship("Return", back_populates="project")
     audit_logs = relationship("AuditLog", back_populates="project")
     surat_permintaans = relationship("SuratPermintaan", back_populates="project")
+    surat_jalans = relationship("SuratJalan", back_populates="project")
 

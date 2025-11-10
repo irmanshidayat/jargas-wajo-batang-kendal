@@ -1,4 +1,4 @@
-version: '3.8'
+
 
 services:
   # MySQL Database Service
@@ -7,19 +7,17 @@ services:
     container_name: jargas_mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: "admin123"
       MYSQL_DATABASE: ${DB_NAME}
-      MYSQL_USER: ${DB_USER}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
       TZ: Asia/Jakarta
     ports:
-      - "${DB_PORT_MAPPED:-3307}:3306"
+      - "${DB_PORT_MAPPED:-3308}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     networks:
       - jargas_network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-padmin123"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -34,10 +32,11 @@ services:
     container_name: jargas_backend
     restart: unless-stopped
     environment:
+      DOCKER_CONTAINER: "true"  # Tambahkan ini untuk deteksi Docker
       DB_HOST: mysql
       DB_PORT: 3306
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_USER: root
+      DB_PASSWORD: "admin123"
       DB_NAME: ${DB_NAME}
       SECRET_KEY: ${SECRET_KEY}
       DEBUG: ${DEBUG:-False}
@@ -84,6 +83,21 @@ services:
       timeout: 3s
       retries: 3
       start_period: 5s
+
+  # Adminer - Database Management Tool
+  adminer:
+    image: adminer:latest
+    container_name: jargas_adminer
+    restart: unless-stopped
+    ports:
+      - "${ADMINER_PORT_MAPPED:-8081}:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - jargas_network
+    environment:
+      TZ: Asia/Jakarta
 
 # Volumes untuk data persistence
 volumes:

@@ -1,7 +1,7 @@
 """add_role_and_permission_tables
 
 Revision ID: d3fea6ca00c1
-Revises: 309b15867534
+Revises: add_is_released_returns_20251031
 Create Date: 2025-11-01 07:59:08.878073
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'd3fea6ca00c1'
-down_revision: Union[str, None] = '309b15867534'
+down_revision: Union[str, None] = 'add_is_released_returns_20251031'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

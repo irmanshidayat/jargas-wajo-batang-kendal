@@ -3,6 +3,17 @@ import { inventoryService, Material, MaterialCreateRequest } from '../services/i
 import Swal from 'sweetalert2'
 import SelectWithSearch from '../components/SelectWithSearch'
 
+// Helper function untuk format Rupiah
+const formatRupiah = (value: number | null | undefined): string => {
+  if (value === null || value === undefined) return '-'
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
 export default function MaterialsPage() {
   const [materials, setMaterials] = useState<Material[]>([])
   const [loading, setLoading] = useState(false)
@@ -17,6 +28,7 @@ export default function MaterialsPage() {
     nama_barang: '',
     satuan: '',
     kategori: '',
+    harga: null,
   })
   const [uniqueSatuans, setUniqueSatuans] = useState<string[]>([])
   const [uniqueKategoris, setUniqueKategoris] = useState<string[]>([])
@@ -61,6 +73,7 @@ export default function MaterialsPage() {
         nama_barang: material.nama_barang,
         satuan: material.satuan,
         kategori: material.kategori || '',
+        harga: material.harga || null,
       })
     } else {
       setEditingMaterial(null)
@@ -69,6 +82,7 @@ export default function MaterialsPage() {
         nama_barang: '',
         satuan: '',
         kategori: '',
+        harga: null,
       })
     }
     
@@ -95,6 +109,7 @@ export default function MaterialsPage() {
       nama_barang: '',
       satuan: '',
       kategori: '',
+      harga: null,
     })
   }
 
@@ -330,6 +345,9 @@ export default function MaterialsPage() {
                   Kategori
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                  Harga
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                   Status
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">
@@ -340,13 +358,13 @@ export default function MaterialsPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {loading && materials.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                  <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
                     Memuat data...
                   </td>
                 </tr>
               ) : materials.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                  <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
                     Tidak ada data material
                   </td>
                 </tr>
@@ -364,6 +382,9 @@ export default function MaterialsPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                       {material.kategori || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                      {formatRupiah(material.harga)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span
@@ -458,6 +479,25 @@ export default function MaterialsPage() {
                 }}
               />
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Harga
+                </label>
+                <input
+                  type="number"
+                  value={formData.harga || ''}
+                  onChange={(e) => {
+                    const value = e.target.value === '' ? null : parseFloat(e.target.value)
+                    setFormData({ ...formData, harga: value !== null && !isNaN(value) ? value : null })
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Masukkan harga (contoh: 150000)"
+                  min="0"
+                  step="0.01"
+                />
+                <p className="text-xs text-gray-500 mt-1">Opsional. Format: angka tanpa titik (contoh: 150000)</p>
+              </div>
+
               <div className="flex justify-end space-x-4 pt-4">
                 <button
                   type="button"
@@ -494,7 +534,7 @@ export default function MaterialsPage() {
                   Format Excel yang Diperlukan:
                 </p>
                 <ul className="text-xs text-blue-700 space-y-1 list-disc list-inside">
-                  <li>Header di row pertama: NO, NAMA BARANG, KODE BARANG, SATUAN, KATEGORI</li>
+                  <li>Header di row pertama: NO, NAMA BARANG, KODE BARANG, SATUAN, KATEGORI, HARGA</li>
                   <li>Data mulai dari row kedua</li>
                   <li>File format: .xlsx (Excel 2007+)</li>
                   <li>Ukuran maksimal: 10MB</li>

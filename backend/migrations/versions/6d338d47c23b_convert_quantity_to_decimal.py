@@ -1,7 +1,7 @@
 """convert_quantity_to_decimal
 
 Revision ID: 6d338d47c23b
-Revises: 9a38be938b89
+Revises: c4f470eb2d52
 Create Date: 2025-11-05 08:45:25.561663
 
 """
@@ -14,7 +14,7 @@ from sqlalchemy import text
 
 # revision identifiers, used by Alembic.
 revision: str = '6d338d47c23b'
-down_revision: Union[str, None] = '9a38be938b89'
+down_revision: Union[str, None] = 'c4f470eb2d52'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

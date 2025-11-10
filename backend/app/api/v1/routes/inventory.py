@@ -15,6 +15,7 @@ from app.services.inventory import (
     NotificationService,
 )
 from app.services.inventory.surat_permintaan_service import SuratPermintaanService
+from app.services.inventory.surat_jalan_service import SuratJalanService
 from app.services.inventory.audit_log_service import AuditLogService, ActionType
 from app.utils.excel_importer import parse_excel_file, validate_material_row
 from app.utils.excel_template import create_material_import_template
@@ -34,6 +35,11 @@ from app.schemas.inventory.surat_permintaan import (
     SuratPermintaanCreateRequest,
     SuratPermintaanUpdateRequest,
     SuratPermintaanResponse,
+)
+from app.schemas.inventory.surat_jalan_request import (
+    SuratJalanCreateRequest,
+    SuratJalanUpdateRequest,
+    SuratJalanResponse,
 )
 from app.schemas.inventory.response import (
     MaterialResponse,
@@ -266,7 +272,7 @@ async def bulk_import_materials(
     """
     Bulk import materials dari file Excel (.xlsx)
     Format Excel: Header di row 1, data mulai dari row 2
-    Kolom: NO, NAMA BARANG, KODE BARANG, SATUAN, KATEGORI
+    Kolom: NO, NAMA BARANG, KODE BARANG, SATUAN, KATEGORI, HARGA
     """
     check_role_permission(current_user, [UserRole.ADMIN, UserRole.GUDANG])
     
@@ -289,7 +295,7 @@ async def bulk_import_materials(
     
     try:
         # Expected headers sesuai dengan format Excel
-        expected_headers = ["NO", "NAMA BARANG", "KODE BARANG", "SATUAN", "KATEGORI"]
+        expected_headers = ["NO", "NAMA BARANG", "KODE BARANG", "SATUAN", "KATEGORI", "HARGA"]
         
         # Parse Excel file
         rows_data, parse_errors = parse_excel_file(
@@ -1256,6 +1262,97 @@ async def get_stock_outs_by_mandor(
     except Exception as e:
         logger = logging.getLogger(__name__)
         logger.error(f"Error getting stock outs by mandor: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Gagal mengambil daftar barang keluar: {str(e)}"
+        )
+
+@router.get(
+    "/stock-out/by-nomor/{nomor_barang_keluar}",
+    response_model=None,
+    status_code=status.HTTP_200_OK,
+    summary="Get stock outs by nomor barang keluar",
+    tags=["Stock Out"]
+)
+async def get_stock_outs_by_nomor(
+    nomor_barang_keluar: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    project_id: int = Depends(get_current_project)
+):
+    """Get semua stock out berdasarkan nomor barang keluar untuk digunakan di form surat jalan"""
+    check_role_permission(current_user, [UserRole.ADMIN, UserRole.GUDANG])
+    
+    try:
+        from sqlalchemy.orm import joinedload, load_only
+        from sqlalchemy import and_, or_, exists
+        from app.models.inventory.stock_out import StockOut
+        from app.models.inventory.material import Material
+        from app.models.inventory.mandor import Mandor
+        from app.models.inventory.return_model import Return
+        
+        query = db.query(StockOut).options(
+            load_only(
+                StockOut.id,
+                StockOut.nomor_barang_keluar,
+                StockOut.mandor_id,
+                StockOut.material_id,
+                StockOut.quantity,
+                StockOut.tanggal_keluar,
+                StockOut.evidence_paths,
+                StockOut.surat_permohonan_paths,
+                StockOut.surat_serah_terima_paths,
+                StockOut.created_at,
+                StockOut.updated_at,
+            ),
+            joinedload(StockOut.material).load_only(
+                Material.id,
+                Material.kode_barang,
+                Material.nama_barang,
+                Material.satuan,
+            ),
+            joinedload(StockOut.mandor).load_only(
+                Mandor.id,
+                Mandor.nama,
+            ),
+        ).filter(
+            StockOut.is_deleted == 0,
+            StockOut.nomor_barang_keluar == nomor_barang_keluar,
+        )
+        
+        # Exclude stock out yang dibuat dari return (retur keluar)
+        query = query.filter(
+            ~exists().where(
+                and_(
+                    Return.stock_out_id == StockOut.id,
+                    Return.is_released == 1,
+                    or_(Return.is_deleted == 0, Return.is_deleted.is_(None))
+                )
+            )
+        )
+        
+        # Filter by project_id jika ada: gunakan Material.project_id
+        if project_id is not None:
+            query = query.join(Material, StockOut.material_id == Material.id).filter(Material.project_id == project_id)
+        
+        stock_outs = query.order_by(StockOut.id.asc()).all()
+        
+        # Pastikan semua relationship ter-load sebelum serialize
+        for item in stock_outs:
+            if item.material_id:
+                _ = item.material
+            if item.mandor_id:
+                _ = item.mandor
+        
+        result_data = [StockOutResponse.model_validate(so).model_dump(mode="json") for so in stock_outs]
+        
+        return success_response(
+            data=result_data,
+            message="Daftar barang keluar berhasil diambil"
+        )
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error getting stock outs by nomor: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Gagal mengambil daftar barang keluar: {str(e)}"
@@ -2532,6 +2629,7 @@ async def get_surat_permintaans(
                     "nomor_surat": sp_full.nomor_surat,
                     "tanggal": sp_full.tanggal.isoformat() if isinstance(sp_full.tanggal, date) else str(sp_full.tanggal),
                     "project_id": sp_full.project_id,
+                    "status": getattr(sp_full, 'status', 'Draft'),
                     "created_by": sp_full.created_by,
                     "created_at": sp_full.created_at.isoformat() if isinstance(sp_full.created_at, datetime) else str(sp_full.created_at),
                     "updated_at": sp_full.updated_at.isoformat() if isinstance(sp_full.updated_at, datetime) else str(sp_full.updated_at),
@@ -2817,6 +2915,7 @@ async def get_surat_permintaan_by_nomor(
             "nomor_surat": sp_full.nomor_surat,
             "tanggal": sp_full.tanggal.isoformat() if isinstance(sp_full.tanggal, date) else str(sp_full.tanggal),
             "project_id": sp_full.project_id,
+            "status": getattr(sp_full, 'status', 'Draft'),
             "created_by": sp_full.created_by,
             "created_at": sp_full.created_at.isoformat() if isinstance(sp_full.created_at, datetime) else str(sp_full.created_at),
             "updated_at": sp_full.updated_at.isoformat() if isinstance(sp_full.updated_at, datetime) else str(sp_full.updated_at),
@@ -2905,5 +3004,506 @@ async def get_surat_permintaan_by_nomor(
         return error_response(
             message=f"Gagal mengambil surat permintaan: {str(e)}",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+# ========== SURAT JALAN ROUTES ==========
+@router.post(
+    "/surat-jalan",
+    response_model=None,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create surat jalan",
+    tags=["Surat Jalan"]
+)
+async def create_surat_jalan(
+    surat_jalan_data: SuratJalanCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    project_id: int = Depends(get_current_project)
+):
+    """Create surat jalan dengan auto-generate nomor form"""
+    check_role_permission(current_user, [UserRole.ADMIN, UserRole.GUDANG])
+    
+    try:
+        surat_jalan_service = SuratJalanService(db)
+        
+        # Convert items to dict format
+        items = []
+        for item in surat_jalan_data.items:
+            qty_value = float(item.qty) if isinstance(item.qty, Decimal) else item.qty
+            
+            items.append({
+                "nama_barang": item.nama_barang,
+                "qty": qty_value,
+                "keterangan": item.keterangan
+            })
+        
+        # Create surat jalan
+        surat_jalan = surat_jalan_service.create(
+            kepada=surat_jalan_data.kepada,
+            tanggal_pengiriman=surat_jalan_data.tanggal_pengiriman,
+            items=items,
+            nama_pemberi=surat_jalan_data.nama_pemberi,
+            nama_penerima=surat_jalan_data.nama_penerima,
+            tanggal_diterima=surat_jalan_data.tanggal_diterima,
+            created_by=current_user.id,
+            project_id=project_id,
+            nomor_surat_permintaan=surat_jalan_data.nomor_surat_permintaan,
+            nomor_barang_keluar=surat_jalan_data.nomor_barang_keluar
+        )
+        
+        # Load items with relationships
+        from sqlalchemy.orm import joinedload
+        from app.models.inventory.surat_jalan import SuratJalan
+        from app.models.inventory.surat_jalan_item import SuratJalanItem
+        
+        sj_full = db.query(SuratJalan).options(
+            joinedload(SuratJalan.items),
+            joinedload(SuratJalan.project),
+            joinedload(SuratJalan.creator)
+        ).filter(SuratJalan.id == surat_jalan.id).first()
+        
+        if not sj_full:
+            return error_response(
+                message="Surat jalan tidak ditemukan setelah dibuat",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        # Build response data manually
+        response_data = {
+            "id": sj_full.id,
+            "nomor_form": sj_full.nomor_form,
+            "kepada": sj_full.kepada,
+            "tanggal_pengiriman": sj_full.tanggal_pengiriman.isoformat() if isinstance(sj_full.tanggal_pengiriman, date) else str(sj_full.tanggal_pengiriman),
+            "nama_pemberi": sj_full.nama_pemberi,
+            "nama_penerima": sj_full.nama_penerima,
+            "tanggal_diterima": sj_full.tanggal_diterima.isoformat() if sj_full.tanggal_diterima and isinstance(sj_full.tanggal_diterima, date) else (str(sj_full.tanggal_diterima) if sj_full.tanggal_diterima else None),
+            "nomor_surat_permintaan": getattr(sj_full, 'nomor_surat_permintaan', None),
+            "nomor_barang_keluar": getattr(sj_full, 'nomor_barang_keluar', None),
+            "stock_out_id": getattr(sj_full, 'stock_out_id', None),
+            "project_id": sj_full.project_id,
+            "created_by": sj_full.created_by,
+            "created_at": sj_full.created_at.isoformat() if isinstance(sj_full.created_at, datetime) else str(sj_full.created_at),
+            "updated_at": sj_full.updated_at.isoformat() if isinstance(sj_full.updated_at, datetime) else str(sj_full.updated_at),
+            "items": []
+        }
+        
+        # Build items
+        for item in sj_full.items:
+            qty_value = float(item.qty) if isinstance(item.qty, Decimal) else item.qty
+            
+            item_data = {
+                "id": item.id,
+                "nama_barang": item.nama_barang,
+                "qty": qty_value,
+                "keterangan": item.keterangan
+            }
+            
+            response_data["items"].append(item_data)
+        
+        # Add project if exists
+        if sj_full.project:
+            response_data["project"] = {
+                "id": sj_full.project.id,
+                "name": sj_full.project.name,
+                "code": sj_full.project.code
+            }
+        else:
+            response_data["project"] = None
+        
+        # Add creator if exists
+        if sj_full.creator:
+            response_data["creator"] = {
+                "id": sj_full.creator.id,
+                "name": sj_full.creator.name,
+                "email": sj_full.creator.email
+            }
+        else:
+            response_data["creator"] = None
+        
+        return success_response(
+            data=response_data,
+            message=f"Surat jalan {surat_jalan.nomor_form} berhasil dibuat"
+        )
+    except Exception as e:
+        logger.error(f"Error creating surat jalan: {str(e)}", exc_info=True)
+        return error_response(
+            message=f"Gagal membuat surat jalan: {str(e)}",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+
+@router.get(
+    "/surat-jalan",
+    response_model=None,
+    status_code=status.HTTP_200_OK,
+    summary="Get list surat jalan",
+    tags=["Surat Jalan"]
+)
+async def get_surat_jalans(
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=1000),
+    search: Optional[str] = Query(None),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    project_id: int = Depends(get_current_project)
+):
+    """Get list surat jalan dengan pagination"""
+    check_role_permission(current_user, [UserRole.ADMIN, UserRole.GUDANG])
+    
+    try:
+        surat_jalan_service = SuratJalanService(db)
+        skip = (page - 1) * limit
+        
+        surat_jalans, total = surat_jalan_service.get_all(
+            skip=skip,
+            limit=limit,
+            search=search,
+            start_date=start_date,
+            end_date=end_date,
+            project_id=project_id
+        )
+        
+        # Convert to response format
+        from sqlalchemy.orm import joinedload
+        from app.models.inventory.surat_jalan import SuratJalan
+        from app.models.inventory.surat_jalan_item import SuratJalanItem
+        
+        response_items = []
+        for sj in surat_jalans:
+            # Load with relationships
+            sj_full = db.query(SuratJalan).options(
+                joinedload(SuratJalan.items),
+                joinedload(SuratJalan.project),
+                joinedload(SuratJalan.creator)
+            ).filter(SuratJalan.id == sj.id).first()
+            
+            if sj_full:
+                # Build response data manually
+                item_data = {
+                    "id": sj_full.id,
+                    "nomor_form": sj_full.nomor_form,
+                    "kepada": sj_full.kepada,
+                    "tanggal_pengiriman": sj_full.tanggal_pengiriman.isoformat() if isinstance(sj_full.tanggal_pengiriman, date) else str(sj_full.tanggal_pengiriman),
+                    "nama_pemberi": sj_full.nama_pemberi,
+                    "nama_penerima": sj_full.nama_penerima,
+                    "tanggal_diterima": sj_full.tanggal_diterima.isoformat() if sj_full.tanggal_diterima and isinstance(sj_full.tanggal_diterima, date) else (str(sj_full.tanggal_diterima) if sj_full.tanggal_diterima else None),
+                    "nomor_surat_permintaan": getattr(sj_full, 'nomor_surat_permintaan', None),
+                    "project_id": sj_full.project_id,
+                    "created_by": sj_full.created_by,
+                    "created_at": sj_full.created_at.isoformat() if isinstance(sj_full.created_at, datetime) else str(sj_full.created_at),
+                    "updated_at": sj_full.updated_at.isoformat() if isinstance(sj_full.updated_at, datetime) else str(sj_full.updated_at),
+                    "items": []
+                }
+                
+                # Build items
+                for item in sj_full.items:
+                    qty_value = float(item.qty) if isinstance(item.qty, Decimal) else item.qty
+                    
+                    item_data_item = {
+                        "id": item.id,
+                        "nama_barang": item.nama_barang,
+                        "qty": qty_value,
+                        "keterangan": item.keterangan
+                    }
+                    
+                    item_data["items"].append(item_data_item)
+                
+                # Add project if exists
+                if sj_full.project:
+                    item_data["project"] = {
+                        "id": sj_full.project.id,
+                        "name": sj_full.project.name,
+                        "code": sj_full.project.code
+                    }
+                else:
+                    item_data["project"] = None
+                
+                # Add creator if exists
+                if sj_full.creator:
+                    item_data["creator"] = {
+                        "id": sj_full.creator.id,
+                        "name": sj_full.creator.name,
+                        "email": sj_full.creator.email
+                    }
+                else:
+                    item_data["creator"] = None
+                
+                response_items.append(item_data)
+        
+        return paginated_response(
+            data=response_items,
+            total=total,
+            page=page,
+            limit=limit,
+            message="Daftar surat jalan berhasil diambil"
+        )
+    except Exception as e:
+        logger.error(f"Error getting surat jalans: {str(e)}", exc_info=True)
+        return error_response(
+            message=f"Gagal mengambil daftar surat jalan: {str(e)}",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@router.get(
+    "/surat-jalan/{surat_jalan_id}",
+    response_model=None,
+    status_code=status.HTTP_200_OK,
+    summary="Get surat jalan by ID",
+    tags=["Surat Jalan"]
+)
+async def get_surat_jalan_by_id(
+    surat_jalan_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    project_id: int = Depends(get_current_project)
+):
+    """Get surat jalan by ID"""
+    check_role_permission(current_user, [UserRole.ADMIN, UserRole.GUDANG])
+    
+    try:
+        surat_jalan_service = SuratJalanService(db)
+        surat_jalan = surat_jalan_service.get_by_id(surat_jalan_id, project_id=project_id)
+        
+        if not surat_jalan:
+            return error_response(
+                message="Surat jalan tidak ditemukan",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Load with relationships
+        from sqlalchemy.orm import joinedload
+        from app.models.inventory.surat_jalan import SuratJalan
+        from app.models.inventory.surat_jalan_item import SuratJalanItem
+        
+        sj_full = db.query(SuratJalan).options(
+            joinedload(SuratJalan.items),
+            joinedload(SuratJalan.project),
+            joinedload(SuratJalan.creator)
+        ).filter(SuratJalan.id == surat_jalan_id).first()
+        
+        if not sj_full:
+            return error_response(
+                message="Surat jalan tidak ditemukan",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Build response data manually
+        response_data = {
+            "id": sj_full.id,
+            "nomor_form": sj_full.nomor_form,
+            "kepada": sj_full.kepada,
+            "tanggal_pengiriman": sj_full.tanggal_pengiriman.isoformat() if isinstance(sj_full.tanggal_pengiriman, date) else str(sj_full.tanggal_pengiriman),
+            "nama_pemberi": sj_full.nama_pemberi,
+            "nama_penerima": sj_full.nama_penerima,
+            "tanggal_diterima": sj_full.tanggal_diterima.isoformat() if sj_full.tanggal_diterima and isinstance(sj_full.tanggal_diterima, date) else (str(sj_full.tanggal_diterima) if sj_full.tanggal_diterima else None),
+            "project_id": sj_full.project_id,
+            "created_by": sj_full.created_by,
+            "created_at": sj_full.created_at.isoformat() if isinstance(sj_full.created_at, datetime) else str(sj_full.created_at),
+            "updated_at": sj_full.updated_at.isoformat() if isinstance(sj_full.updated_at, datetime) else str(sj_full.updated_at),
+            "items": []
+        }
+        
+        # Build items
+        for item in sj_full.items:
+            qty_value = float(item.qty) if isinstance(item.qty, Decimal) else item.qty
+            
+            item_data = {
+                "id": item.id,
+                "nama_barang": item.nama_barang,
+                "qty": qty_value,
+                "keterangan": item.keterangan
+            }
+            
+            response_data["items"].append(item_data)
+        
+        # Add project if exists
+        if sj_full.project:
+            response_data["project"] = {
+                "id": sj_full.project.id,
+                "name": sj_full.project.name,
+                "code": sj_full.project.code
+            }
+        else:
+            response_data["project"] = None
+        
+        # Add creator if exists
+        if sj_full.creator:
+            response_data["creator"] = {
+                "id": sj_full.creator.id,
+                "name": sj_full.creator.name,
+                "email": sj_full.creator.email
+            }
+        else:
+            response_data["creator"] = None
+        
+        return success_response(
+            data=response_data,
+            message="Surat jalan berhasil diambil"
+        )
+    except Exception as e:
+        logger.error(f"Error getting surat jalan by ID: {str(e)}", exc_info=True)
+        return error_response(
+            message=f"Gagal mengambil surat jalan: {str(e)}",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@router.put(
+    "/surat-jalan/{surat_jalan_id}",
+    response_model=None,
+    status_code=status.HTTP_200_OK,
+    summary="Update surat jalan",
+    tags=["Surat Jalan"]
+)
+async def update_surat_jalan(
+    surat_jalan_id: int,
+    surat_jalan_data: SuratJalanUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    project_id: int = Depends(get_current_project)
+):
+    """Update surat jalan"""
+    check_role_permission(current_user, [UserRole.ADMIN, UserRole.GUDANG])
+    
+    try:
+        surat_jalan_service = SuratJalanService(db)
+        
+        # Convert items to dict format if provided
+        items = None
+        if surat_jalan_data.items:
+            items = []
+            for item in surat_jalan_data.items:
+                qty_value = float(item.qty) if isinstance(item.qty, Decimal) else item.qty
+                
+                items.append({
+                    "nama_barang": item.nama_barang,
+                    "qty": qty_value,
+                    "keterangan": item.keterangan
+                })
+        
+        # Update surat jalan
+        surat_jalan = surat_jalan_service.update(
+            id=surat_jalan_id,
+            kepada=surat_jalan_data.kepada,
+            tanggal_pengiriman=surat_jalan_data.tanggal_pengiriman,
+            items=items,
+            nama_pemberi=surat_jalan_data.nama_pemberi,
+            nama_penerima=surat_jalan_data.nama_penerima,
+            tanggal_diterima=surat_jalan_data.tanggal_diterima,
+            updated_by=current_user.id,
+            project_id=project_id
+        )
+        
+        # Load with relationships
+        from sqlalchemy.orm import joinedload
+        from app.models.inventory.surat_jalan import SuratJalan
+        from app.models.inventory.surat_jalan_item import SuratJalanItem
+        
+        sj_full = db.query(SuratJalan).options(
+            joinedload(SuratJalan.items),
+            joinedload(SuratJalan.project),
+            joinedload(SuratJalan.creator)
+        ).filter(SuratJalan.id == surat_jalan.id).first()
+        
+        if not sj_full:
+            return error_response(
+                message="Surat jalan tidak ditemukan setelah diupdate",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        # Build response data manually
+        response_data = {
+            "id": sj_full.id,
+            "nomor_form": sj_full.nomor_form,
+            "kepada": sj_full.kepada,
+            "tanggal_pengiriman": sj_full.tanggal_pengiriman.isoformat() if isinstance(sj_full.tanggal_pengiriman, date) else str(sj_full.tanggal_pengiriman),
+            "nama_pemberi": sj_full.nama_pemberi,
+            "nama_penerima": sj_full.nama_penerima,
+            "tanggal_diterima": sj_full.tanggal_diterima.isoformat() if sj_full.tanggal_diterima and isinstance(sj_full.tanggal_diterima, date) else (str(sj_full.tanggal_diterima) if sj_full.tanggal_diterima else None),
+            "project_id": sj_full.project_id,
+            "created_by": sj_full.created_by,
+            "created_at": sj_full.created_at.isoformat() if isinstance(sj_full.created_at, datetime) else str(sj_full.created_at),
+            "updated_at": sj_full.updated_at.isoformat() if isinstance(sj_full.updated_at, datetime) else str(sj_full.updated_at),
+            "items": []
+        }
+        
+        # Build items
+        for item in sj_full.items:
+            qty_value = float(item.qty) if isinstance(item.qty, Decimal) else item.qty
+            
+            item_data = {
+                "id": item.id,
+                "nama_barang": item.nama_barang,
+                "qty": qty_value,
+                "keterangan": item.keterangan
+            }
+            
+            response_data["items"].append(item_data)
+        
+        # Add project if exists
+        if sj_full.project:
+            response_data["project"] = {
+                "id": sj_full.project.id,
+                "name": sj_full.project.name,
+                "code": sj_full.project.code
+            }
+        else:
+            response_data["project"] = None
+        
+        # Add creator if exists
+        if sj_full.creator:
+            response_data["creator"] = {
+                "id": sj_full.creator.id,
+                "name": sj_full.creator.name,
+                "email": sj_full.creator.email
+            }
+        else:
+            response_data["creator"] = None
+        
+        return success_response(
+            data=response_data,
+            message=f"Surat jalan {surat_jalan.nomor_form} berhasil diupdate"
+        )
+    except Exception as e:
+        logger.error(f"Error updating surat jalan: {str(e)}", exc_info=True)
+        return error_response(
+            message=f"Gagal mengupdate surat jalan: {str(e)}",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+
+@router.delete(
+    "/surat-jalan/{surat_jalan_id}",
+    response_model=None,
+    status_code=status.HTTP_200_OK,
+    summary="Delete surat jalan",
+    tags=["Surat Jalan"]
+)
+async def delete_surat_jalan(
+    surat_jalan_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    project_id: int = Depends(get_current_project)
+):
+    """Soft delete surat jalan"""
+    check_role_permission(current_user, [UserRole.ADMIN, UserRole.GUDANG])
+    
+    try:
+        surat_jalan_service = SuratJalanService(db)
+        surat_jalan_service.soft_delete(surat_jalan_id, current_user.id, project_id=project_id)
+        
+        return success_response(
+            data=None,
+            message="Surat jalan berhasil dihapus"
+        )
+    except Exception as e:
+        logger.error(f"Error deleting surat jalan: {str(e)}", exc_info=True)
+        return error_response(
+            message=f"Gagal menghapus surat jalan: {str(e)}",
+            status_code=status.HTTP_400_BAD_REQUEST
         )
 

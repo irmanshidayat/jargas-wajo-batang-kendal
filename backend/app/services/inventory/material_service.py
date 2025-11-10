@@ -97,7 +97,7 @@ class MaterialService(BaseService[MaterialRepository]):
         Bulk create materials dari list of dictionaries
         
         Args:
-            materials_data: List of dictionaries dengan keys: nama_barang, kode_barang, satuan, kategori
+            materials_data: List of dictionaries dengan keys: nama_barang, kode_barang, satuan, kategori, harga
         
         Returns:
             Dictionary dengan keys: success_count, failed_count, errors (list of error messages)
@@ -171,6 +171,24 @@ class MaterialService(BaseService[MaterialRepository]):
                     material_data['kategori'] = kategori_upper
                 else:
                     material_data['kategori'] = None
+                
+                # Harga (optional, tapi kalau ada harus numerik dan >= 0)
+                harga_str = row.get('harga', '').strip()
+                if harga_str:
+                    try:
+                        from decimal import Decimal
+                        harga_value = Decimal(str(harga_str))
+                        if harga_value < 0:
+                            failed_count += 1
+                            errors.append(f"Row {row_num}: Harga tidak boleh negatif")
+                            continue
+                        material_data['harga'] = harga_value
+                    except (ValueError, TypeError, Exception) as e:
+                        failed_count += 1
+                        errors.append(f"Row {row_num}: Harga harus berupa angka (contoh: 150000 atau 150000.50)")
+                        continue
+                else:
+                    material_data['harga'] = None
                 
                 # Create material
                 try:

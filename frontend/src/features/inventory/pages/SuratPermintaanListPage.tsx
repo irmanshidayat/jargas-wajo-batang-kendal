@@ -6,9 +6,9 @@ import DateRangeFilter from '@/components/common/DateRangeFilter'
 import { useInventoryList } from '../hooks/useInventoryList'
 import {
   generateSuratPermintaanPDF,
-  printSuratPermintaanPDF,
-  type SuratPermintaanData
+  printSuratPermintaanPDF
 } from '@/utils/pdfGenerator'
+import type { SuratPermintaanData } from '@/utils/pdfGenerator'
 
 export default function SuratPermintaanListPage() {
   const navigate = useNavigate()
@@ -175,6 +175,7 @@ export default function SuratPermintaanListPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nomor Surat</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Project</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Jumlah Item</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created By</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -183,14 +184,14 @@ export default function SuratPermintaanListPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {loading && (
                 <tr>
-                  <td className="px-4 py-4 text-center text-gray-500" colSpan={6}>
+                  <td className="px-4 py-4 text-center text-gray-500" colSpan={7}>
                     Memuat data...
                   </td>
                 </tr>
               )}
               {!loading && data.length === 0 && (
                 <tr>
-                  <td className="px-4 py-4 text-center text-gray-500" colSpan={6}>
+                  <td className="px-4 py-4 text-center text-gray-500" colSpan={7}>
                     Belum ada data surat permintaan
                   </td>
                 </tr>
@@ -205,6 +206,19 @@ export default function SuratPermintaanListPage() {
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
                     {row.project?.name || '-'}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      row.status === 'Draft' 
+                        ? 'bg-gray-100 text-gray-800' 
+                        : row.status === 'Barang Keluar Dibuat'
+                        ? 'bg-blue-100 text-blue-800'
+                        : row.status === 'Selesai'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {row.status || 'Draft'}
+                    </span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 text-center">
                     {row.items?.length || 0}

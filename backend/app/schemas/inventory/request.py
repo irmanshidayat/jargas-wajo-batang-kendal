@@ -10,6 +10,7 @@ class MaterialCreateRequest(BaseModel):
     nama_barang: str = Field(..., min_length=1, max_length=255)
     satuan: str = Field(..., min_length=1, max_length=50)
     kategori: Optional[str] = Field(None, max_length=100)
+    harga: Optional[Decimal] = Field(None, ge=0)
 
 
 class MaterialUpdateRequest(BaseModel):
@@ -17,6 +18,7 @@ class MaterialUpdateRequest(BaseModel):
     nama_barang: Optional[str] = Field(None, min_length=1, max_length=255)
     satuan: Optional[str] = Field(None, min_length=1, max_length=50)
     kategori: Optional[str] = Field(None, max_length=100)
+    harga: Optional[Decimal] = Field(None, ge=0)
     is_active: Optional[int] = Field(None, ge=0, le=1)
 
 

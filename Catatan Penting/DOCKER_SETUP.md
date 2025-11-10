@@ -1,6 +1,51 @@
 # Dokumentasi Docker Setup - Jargas APBN
 
+1) Rebuild container backend (jika belum):
+docker-compose build backend
+docker-compose up -d backend
+
+2) Restart backend container agar perubahan berlaku:
+docker-compose restart backend
+Atau restart semua services:
+docker-compose restart
+3) Verifikasi migration dengan melihat log backend:
+docker-compose logs backend | grep -i migration
+Atau lihat log lengkap:
+4) Verifikasi tabel sudah dibuat (opsional):
+# Masuk ke MySQL containerdocker-compose exec mysql mysql -u jargas_user -p jargas_apbn# Setelah masuk, jalankan:SHOW TABLES;# Keluar dari MySQLexit;
+
 Dokumentasi lengkap untuk setup dan menjalankan aplikasi Jargas APBN menggunakan Docker.
+
+Tabel masih kosong karena migration belum dijalankan. Berikut langkah-langkahnya:
+Langkah 1: Cek Status Migration
+Cek apakah ada migration yang perlu dijalankan:
+docker-compose exec backend python scripts/check_migration_status.py
+Atau cek dengan alembic:
+docker-compose exec backend alembic current
+Langkah 2: Jalankan Migration
+Jalankan migration untuk membuat semua tabel:
+docker-compose exec backend alembic upgrade head
+Atau gunakan script Python:
+docker-compose exec backend python scripts/run_migrations.py
+Langkah 3: Cek Log dengan PowerShell (bukan grep)
+Di PowerShell, gunakan Select-String sebagai pengganti grep:
+docker-compose logs backend | Select-String -Pattern "migration" -CaseSensitive:$false
+Atau lihat log lengkap:
+docker-compose logs backend --tail 100
+Langkah 4: Verifikasi Tabel Setelah Migration
+Setelah migration selesai, cek kembali tabel:
+docker-compose exec mysql mysql -u jargas_user -p jargas_apbn# Password: JargasAPBN2024Secure!# Di dalam MySQL:SHOW TABLES;# Keluarexit;
+Jika Ingin Auto-Migrate (Opsional)
+Jika ingin migration berjalan otomatis saat backend start:
+Edit file .env di root project, ubah:
+   AUTO_MIGRATE=False
+menjadi:
+   AUTO_MIGRATE=True
+Restart backend:
+   docker-compose restart backend
+Ringkasan Perintah yang Perlu Dijalankan
+# 1. Jalankan migration (WAJIB untuk membuat tabel)docker-compose exec backend alembic upgrade head# 2. Cek log (PowerShell)docker-compose logs backend | Select-String -Pattern "migration" -CaseSensitive:$false# 3. Verifikasi tabel sudah dibuatdocker-compose exec mysql mysql -u jargas_user -p jargas_apbn# Masukkan password: JargasAPBN2024Secure!# Lalu: SHOW TABLES;
+
 
 ## 📋 Daftar Isi
 

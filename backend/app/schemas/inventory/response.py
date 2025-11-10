@@ -10,6 +10,7 @@ class MaterialResponse(BaseModel):
     nama_barang: str
     satuan: str
     kategori: Optional[str]
+    harga: Optional[float] = None
     is_active: int
     created_at: datetime
     updated_at: datetime

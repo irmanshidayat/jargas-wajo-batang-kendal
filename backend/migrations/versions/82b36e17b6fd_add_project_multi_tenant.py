@@ -1,7 +1,7 @@
 """add_project_multi_tenant
 
 Revision ID: 82b36e17b6fd
-Revises: d3fea6ca00c1
+Revises: add_surat_permohonan_stock_outs
 Create Date: 2025-01-15 10:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '82b36e17b6fd'
-down_revision: Union[str, None] = 'd3fea6ca00c1'
+down_revision: Union[str, None] = 'add_surat_permohonan_stock_outs'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

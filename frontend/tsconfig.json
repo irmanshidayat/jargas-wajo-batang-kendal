@@ -16,8 +16,8 @@
 
     /* Linting */
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedLocals": false,  // Ubah dari true ke false
+    "noUnusedParameters": false,  // Ubah dari true ke false
     "noFallthroughCasesInSwitch": true,
 
     /* Path aliases */

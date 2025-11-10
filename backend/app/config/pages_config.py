@@ -108,34 +108,48 @@ PAGES_CONFIG = [
         "icon": "list",
         "order": 14,
     },
+    {
+        "name": "surat_jalan",
+        "path": "/inventory/surat-jalan",
+        "display_name": "Surat Jalan",
+        "icon": "document",
+        "order": 15,
+    },
+    {
+        "name": "surat_jalan_list",
+        "path": "/inventory/surat-jalan/list",
+        "display_name": "Daftar Surat Jalan",
+        "icon": "list",
+        "order": 16,
+    },
     # User Management
     {
         "name": "user_management",
         "path": "/user-management",
         "display_name": "User dan Role Management",
         "icon": "users",
-        "order": 15,
+        "order": 17,
     },
     {
         "name": "user_management_users",
         "path": "/user-management/users",
         "display_name": "Manajemen User",
         "icon": "user-list",
-        "order": 16,
+        "order": 18,
     },
     {
         "name": "user_management_roles",
         "path": "/user-management/roles",
         "display_name": "Manajemen Role",
         "icon": "role",
-        "order": 17,
+        "order": 19,
     },
     {
         "name": "user_management_permissions",
         "path": "/user-management/permissions",
         "display_name": "Manajemen Permissions",
         "icon": "permissions",
-        "order": 18,
+        "order": 20,
     },
 ]
 

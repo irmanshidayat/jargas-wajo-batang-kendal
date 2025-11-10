@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, String, Integer, ForeignKey, UniqueConstraint, Numeric
 from sqlalchemy.orm import relationship
 from app.models.base import BaseModel
 
@@ -13,6 +13,7 @@ class Material(BaseModel):
     nama_barang = Column(String(255), nullable=False, index=True)
     satuan = Column(String(50), nullable=False)  # pcs, kg, m, dll
     kategori = Column(String(100), nullable=True, index=True)
+    harga = Column(Numeric(15, 2), nullable=True)  # Harga material (opsional)
     is_active = Column(Integer, default=1, nullable=False)  # 1 = aktif, 0 = tidak aktif
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
     

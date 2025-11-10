@@ -1,7 +1,7 @@
 """add_project_id_to_stock_ins_if_not_exists
 
 Revision ID: 82290d859f86
-Revises: ddf3b77ebeb4
+Revises: d3fea6ca00c1
 Create Date: 2025-11-03 10:30:29.151185
 
 """
@@ -14,7 +14,7 @@ from sqlalchemy import text
 
 # revision identifiers, used by Alembic.
 revision: str = '82290d859f86'
-down_revision: Union[str, None] = 'ddf3b77ebeb4'
+down_revision: Union[str, None] = 'd3fea6ca00c1'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

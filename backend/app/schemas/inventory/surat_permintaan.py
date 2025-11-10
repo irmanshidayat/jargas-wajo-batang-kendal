@@ -49,6 +49,7 @@ class SuratPermintaanResponse(BaseModel):
     nomor_surat: str
     tanggal: date
     project_id: int
+    status: str = "Draft"  # Draft, Barang Keluar Dibuat, Selesai
     signatures: Optional[dict] = None
     created_by: int
     created_at: str

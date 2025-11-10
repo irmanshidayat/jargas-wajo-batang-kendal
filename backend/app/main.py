@@ -134,34 +134,51 @@ async def startup_event():
     if settings.AUTO_MIGRATE:
         try:
             from app.utils.migration import auto_migrate_safe
-            logger.info("Auto-migrate diaktifkan, memeriksa migration status...")
+            migration_mode = settings.MIGRATION_MODE or "sequential"
+            logger.info(f"Auto-migrate diaktifkan (mode: {migration_mode}), memeriksa migration status...")
             
             result = auto_migrate_safe(only_if_pending=settings.AUTO_MIGRATE_ONLY_IF_PENDING)
             
             if result["success"]:
                 if result["migrated"]:
-                    logger.info(f"✅ Auto-migration berhasil: {result['message']}")
+                    mode_info = f" (mode: {result.get('mode', migration_mode)})" if result.get('mode') else ""
+                    logger.info(f"✅ Auto-migration berhasil{mode_info}: {result['message']}")
                 else:
                     logger.info(f"ℹ️ {result['message']}")
             else:
                 logger.warning(f"⚠️ Auto-migration gagal: {result.get('message', 'Unknown error')}")
+                if result.get('error'):
+                    logger.warning(f"   Error detail: {result['error']}")
                 logger.warning("Aplikasi akan tetap berjalan, namun sebaiknya periksa migration secara manual")
+                logger.warning("💡 Gunakan: python -m scripts.smart_migrate --status untuk cek status")
         except Exception as e:
             # Jangan crash aplikasi jika auto-migrate gagal
             logger.error(f"Error during auto-migrate: {str(e)}", exc_info=True)
             logger.warning("Application will continue despite auto-migrate error")
             logger.warning("⚠️ PERHATIAN: Periksa status migration database secara manual!")
+            logger.warning("💡 Gunakan: python -m scripts.smart_migrate --status untuk cek status")
     else:
         logger.info("Auto-migrate tidak diaktifkan (AUTO_MIGRATE=False). Gunakan script manual untuk migration.")
+        logger.info("💡 Gunakan: python -m scripts.smart_migrate untuk migration manual")
     
     # 2. Auto-generate pages dan permissions
     try:
         from scripts.auto_generate_pages import auto_generate_pages
         logger.info("Running auto-generate pages and permissions...")
         auto_generate_pages()
+    except ConnectionError as e:
+        # Error koneksi database - tampilkan pesan yang jelas
+        logger.error(f"❌ Database connection error: {str(e)}")
+        logger.warning("⚠️  Application will continue, but pages may not be auto-generated")
+        logger.warning("⚠️  Periksa konfigurasi database di file .env dan pastikan MySQL/XAMPP berjalan")
     except Exception as e:
         # Jangan crash aplikasi jika auto-generate gagal
-        logger.error(f"Error during auto-generate pages: {str(e)}", exc_info=True)
+        error_msg = str(e)
+        # Tampilkan traceback hanya jika DEBUG mode
+        if settings.DEBUG:
+            logger.error(f"Error during auto-generate pages: {error_msg}", exc_info=True)
+        else:
+            logger.error(f"Error during auto-generate pages: {error_msg}")
         logger.warning("Application will continue despite auto-generate error")
 
 

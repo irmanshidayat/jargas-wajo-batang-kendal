@@ -104,7 +104,7 @@ def validate_material_row(
     Validate single material row data
     
     Args:
-        row: Dictionary dengan keys: no, nama_barang, kode_barang, satuan, kategori
+        row: Dictionary dengan keys: no, nama_barang, kode_barang, satuan, kategori, harga
         valid_kategoris: List of valid kategori values (case insensitive)
     
     Returns:
@@ -145,6 +145,16 @@ def validate_material_row(
             valid_upper = [k.upper() for k in valid_kategoris]
             if kategori_upper not in valid_upper:
                 return False, f"Row {row_num}: Kategori '{kategori}' tidak valid. Kategori yang valid: {', '.join(valid_kategoris)}"
+    
+    # Validasi harga (opsional, tapi kalau ada harus numerik dan >= 0)
+    harga_str = row.get('harga', '').strip()
+    if harga_str:
+        try:
+            harga_value = float(harga_str)
+            if harga_value < 0:
+                return False, f"Row {row_num}: Harga tidak boleh negatif"
+        except (ValueError, TypeError):
+            return False, f"Row {row_num}: Harga harus berupa angka (contoh: 150000 atau 150000.50)"
     
     return True, None
 

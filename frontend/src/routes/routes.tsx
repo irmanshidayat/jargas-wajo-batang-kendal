@@ -17,6 +17,8 @@ import InstalledPage from '@/features/inventory/pages/InstalledPage'
 import InstalledListPage from '@/features/inventory/pages/InstalledListPage'
 import SuratPermintaanPage from '@/features/inventory/pages/SuratPermintaanPage'
 import SuratPermintaanListPage from '@/features/inventory/pages/SuratPermintaanListPage'
+import SuratJalanPage from '@/features/inventory/pages/SuratJalanPage'
+import SuratJalanListPage from '@/features/inventory/pages/SuratJalanListPage'
 import UserManagementMainPage from '@/features/user-management/pages/UserManagementMainPage'
 import UsersManagementPage from '@/features/user-management/pages/UsersManagementPage'
 import RolesManagementPage from '@/features/user-management/pages/RolesManagementPage'
@@ -162,6 +164,22 @@ export const router = createBrowserRouter([
         element: (
           <PrivateRoute requiredPermission="read">
             <SuratPermintaanListPage />
+          </PrivateRoute>
+        ),
+      },
+      {
+        path: 'inventory/surat-jalan',
+        element: (
+          <PrivateRoute requiredPermission="read">
+            <SuratJalanPage />
+          </PrivateRoute>
+        ),
+      },
+      {
+        path: 'inventory/surat-jalan/list',
+        element: (
+          <PrivateRoute requiredPermission="read">
+            <SuratJalanListPage />
           </PrivateRoute>
         ),
       },

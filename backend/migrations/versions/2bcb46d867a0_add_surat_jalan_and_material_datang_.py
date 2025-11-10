@@ -1,7 +1,7 @@
 """add_surat_jalan_and_material_datang_paths_to_stock_ins
 
 Revision ID: 2bcb46d867a0
-Revises: 20251031_make_kode_barang_nullable
+Revises: (base)
 Create Date: 2025-10-31 22:37:33.876207
 
 """
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import mysql
 
 # revision identifiers, used by Alembic.
 revision: str = '2bcb46d867a0'
-down_revision: Union[str, None] = '20251031_make_kode_barang_nullable'
+down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

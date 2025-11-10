@@ -245,3 +245,21 @@ class SuratPermintaanService:
             self.logger.error(f"Error getting surat permintaan by nomor surat: {str(e)}", exc_info=True)
             return None
 
+    def update_status(self, nomor_surat: str, status: str, project_id: Optional[int] = None) -> bool:
+        """Update status surat permintaan by nomor surat"""
+        try:
+            surat_permintaan = self.get_by_nomor_surat(nomor_surat, project_id=project_id)
+            if not surat_permintaan:
+                self.logger.warning(f"Surat permintaan dengan nomor {nomor_surat} tidak ditemukan untuk update status")
+                return False
+            
+            surat_permintaan.status = status
+            self.db.commit()
+            self.db.refresh(surat_permintaan)
+            self.logger.info(f"Status surat permintaan {nomor_surat} berhasil diupdate menjadi {status}")
+            return True
+        except Exception as e:
+            self.db.rollback()
+            self.logger.error(f"Error updating status surat permintaan: {str(e)}", exc_info=True)
+            return False
+

@@ -1,19 +1,20 @@
 """make kode_barang nullable in materials
 
 Revision ID: 20251031_make_kode_barang_nullable
-Revises: add_is_released_returns_20251031
+Revises: 82290d859f86
 Create Date: 2025-10-31
 """
 
+from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '20251031_make_kode_barang_nullable'
-down_revision = 'add_is_released_returns_20251031'
-branch_labels = None
-depends_on = None
+revision: str = '20251031_make_kode_barang_nullable'
+down_revision: Union[str, None] = '82290d859f86'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade():

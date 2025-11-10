@@ -1,11 +1,13 @@
 """
 Utility untuk menjalankan migrasi database secara programmatic
+Menggunakan Migration Manager dengan best practice implementation
 """
 import logging
 from pathlib import Path
 from alembic import command
 from alembic.config import Config
 from app.config.settings import settings
+from app.utils.migration_manager import MigrationManager, MigrationMode
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +139,7 @@ def get_migration_info() -> dict:
 def auto_migrate_safe(only_if_pending: bool = True) -> dict:
     """
     Jalankan auto-migrate dengan validasi dan safety checks (Best Practice)
+    Menggunakan Migration Manager baru dengan sequential mode sebagai default
     
     Args:
         only_if_pending: Jika True, hanya migrate jika ada pending migration
@@ -144,64 +147,68 @@ def auto_migrate_safe(only_if_pending: bool = True) -> dict:
     Returns:
         dict: Status hasil migration dengan detail
     """
-    result = {
-        "success": False,
-        "migrated": False,
-        "message": "",
-        "current_revision": None,
-        "head_revision": None,
-        "error": None
-    }
-    
     try:
-        # 1. Cek migration info terlebih dahulu
-        migration_info = get_migration_info()
-        result["current_revision"] = migration_info.get("current_revision")
-        result["head_revision"] = migration_info.get("head_revision")
+        # Gunakan Migration Manager baru
+        manager = MigrationManager()
         
-        if migration_info.get("error"):
-            result["error"] = migration_info["error"]
-            result["message"] = "Gagal mendapatkan informasi migration"
-            logger.error(f"Error getting migration info: {migration_info['error']}")
-            return result
+        # Get migration status
+        status = manager.get_migration_status()
         
-        # 2. Cek apakah sudah up-to-date
-        if migration_info.get("is_up_to_date"):
+        result = {
+            "success": False,
+            "migrated": False,
+            "message": "",
+            "current_revision": status.get("current_revision"),
+            "head_revision": status.get("head_revision"),
+            "error": None,
+            "mode": manager.mode.value
+        }
+        
+        # Cek apakah sudah up-to-date
+        if status.get("is_up_to_date"):
             result["success"] = True
             result["migrated"] = False
             result["message"] = "Database sudah up-to-date, tidak ada migration yang perlu dijalankan"
             logger.info(f"Database sudah up-to-date (revision: {result['current_revision']})")
             return result
         
-        # 3. Jika only_if_pending=True dan tidak ada pending, skip
-        if only_if_pending and not migration_info.get("is_pending"):
+        # Jika only_if_pending=True dan tidak ada pending, skip
+        if only_if_pending and not status.get("has_pending"):
             result["success"] = True
             result["migrated"] = False
             result["message"] = "Tidak ada pending migration"
             logger.info("Tidak ada pending migration, skip auto-migrate")
             return result
         
-        # 4. Jalankan migration
-        logger.info(f"Memulai auto-migration dari {result['current_revision']} ke {result['head_revision']}")
-        if run_migrations_upgrade("head"):
-            # Verifikasi setelah migration
-            new_info = get_migration_info()
-            result["success"] = True
-            result["migrated"] = True
-            result["current_revision"] = new_info.get("current_revision")
-            result["message"] = f"Auto-migration berhasil: {result['current_revision']} -> {result['head_revision']}"
-            logger.info(result["message"])
+        # Jalankan migration menggunakan manager
+        logger.info(f"Memulai auto-migration dari {result['current_revision']} ke {result['head_revision']} (mode: {manager.mode.value})")
+        upgrade_result = manager.upgrade()
+        
+        # Map result dari manager ke format yang diharapkan
+        result["success"] = upgrade_result.get("success", False)
+        result["migrated"] = upgrade_result.get("success", False) and len(upgrade_result.get("applied", [])) > 0
+        result["message"] = upgrade_result.get("message", "")
+        result["current_revision"] = upgrade_result.get("final_revision") or upgrade_result.get("current_revision")
+        
+        if upgrade_result.get("errors"):
+            result["error"] = "; ".join(upgrade_result["errors"])
+        
+        if result["migrated"]:
+            logger.info(f"✅ {result['message']}")
         else:
-            result["success"] = False
-            result["migrated"] = False
-            result["message"] = "Gagal menjalankan migration"
-            logger.error("Gagal menjalankan auto-migration")
+            logger.warning(f"⚠️ {result['message']}")
+        
+        return result
         
     except Exception as e:
-        result["success"] = False
-        result["error"] = str(e)
-        result["message"] = f"Error saat auto-migrate: {str(e)}"
-        logger.error(f"Error saat auto-migrate: {str(e)}", exc_info=True)
-    
-    return result
+        error_msg = str(e)
+        logger.error(f"Error saat auto-migrate: {error_msg}", exc_info=True)
+        return {
+            "success": False,
+            "migrated": False,
+            "message": f"Error saat auto-migrate: {error_msg}",
+            "current_revision": None,
+            "head_revision": None,
+            "error": error_msg
+        }
 

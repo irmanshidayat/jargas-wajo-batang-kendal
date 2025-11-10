@@ -8,6 +8,8 @@ from app.models.inventory.notification import Notification
 from app.models.inventory.audit_log import AuditLog
 from app.models.inventory.surat_permintaan import SuratPermintaan
 from app.models.inventory.surat_permintaan_item import SuratPermintaanItem
+from app.models.inventory.surat_jalan import SuratJalan
+from app.models.inventory.surat_jalan_item import SuratJalanItem
 
 __all__ = [
     "Material",
@@ -20,5 +22,7 @@ __all__ = [
     "AuditLog",
     "SuratPermintaan",
     "SuratPermintaanItem",
+    "SuratJalan",
+    "SuratJalanItem",
 ]
 

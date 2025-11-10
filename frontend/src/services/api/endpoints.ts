@@ -96,6 +96,7 @@ export const API_ENDPOINTS = {
       GET_ALL: '/inventory/stock-out',
       GET_BY_ID: (id: number) => `/inventory/stock-out/${id}`,
       GET_BY_MANDOR: (mandorId: number) => `/inventory/stock-out/by-mandor/${mandorId}`,
+      GET_BY_NOMOR: (nomor: string) => `/inventory/stock-out/by-nomor/${nomor}`,
       CREATE: '/inventory/stock-out',
       CREATE_BULK: '/inventory/stock-out/bulk',
     },
@@ -131,6 +132,14 @@ export const API_ENDPOINTS = {
       GET_BY_ID: (id: number) => `/inventory/surat-permintaan/${id}`,
       GET_BY_NOMOR: (nomor_surat: string) => `/inventory/surat-permintaan/by-nomor/${nomor_surat}`,
       CREATE: '/inventory/surat-permintaan',
+    },
+    // Inventory - Surat Jalan
+    SURAT_JALAN: {
+      GET_ALL: '/inventory/surat-jalan',
+      GET_BY_ID: (id: number) => `/inventory/surat-jalan/${id}`,
+      CREATE: '/inventory/surat-jalan',
+      UPDATE: (id: number) => `/inventory/surat-jalan/${id}`,
+      DELETE: (id: number) => `/inventory/surat-jalan/${id}`,
     },
     // Inventory - Export
     EXPORT_EXCEL: '/inventory/export-excel',

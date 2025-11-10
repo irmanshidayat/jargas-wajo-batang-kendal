@@ -6,6 +6,7 @@ import {
   buildBulkFormData,
   extractData,
   extractPaginatedResponse,
+  extractItems,
   downloadExcel,
 } from '@/utils/api'
 
@@ -16,6 +17,7 @@ export interface Material {
   nama_barang: string
   satuan: string
   kategori?: string
+  harga?: number | null
   is_active: number
   created_at: string
   updated_at: string
@@ -159,6 +161,7 @@ export interface MaterialCreateRequest {
   nama_barang: string
   satuan: string
   kategori?: string
+  harga?: number | null
 }
 
 export interface MandorCreateRequest {
@@ -251,6 +254,7 @@ export interface SuratPermintaan {
   nomor_surat: string
   tanggal: string
   project_id: number
+  status?: string  // Draft, Barang Keluar Dibuat, Selesai
   project?: {
     id: number
     name: string
@@ -304,6 +308,62 @@ export interface SuratPermintaanCreateRequest {
     mengetahuiSPV?: string
     mengetahuiAdminGudang?: string
   } | null
+}
+
+// Surat Jalan Types
+export interface SuratJalanItem {
+  id?: number
+  nama_barang: string
+  qty: number
+  keterangan?: string
+}
+
+export interface SuratJalan {
+  id: number
+  nomor_form: string
+  kepada: string
+  tanggal_pengiriman: string
+  nama_pemberi?: string
+  nama_penerima?: string
+  tanggal_diterima?: string
+  nomor_surat_permintaan?: string  // Relasi ke surat permintaan
+  nomor_barang_keluar?: string  // Nomor barang keluar yang digunakan
+  stock_out_id?: number  // Foreign key ke stock_out
+  project_id: number
+  created_by: number
+  created_at: string
+  updated_at: string
+  items: SuratJalanItem[]
+  project?: {
+    id: number
+    name: string
+    code?: string
+  }
+  creator?: {
+    id: number
+    name: string
+    email: string
+  }
+}
+
+export interface SuratJalanCreateRequest {
+  kepada: string
+  tanggal_pengiriman: string
+  items: SuratJalanItem[]
+  nama_pemberi?: string
+  nama_penerima?: string
+  tanggal_diterima?: string
+  nomor_surat_permintaan?: string  // Relasi ke surat permintaan
+  nomor_barang_keluar?: string  // Nomor barang keluar yang akan digunakan sebagai nomor_form
+}
+
+export interface SuratJalanUpdateRequest {
+  kepada?: string
+  tanggal_pengiriman?: string
+  items?: SuratJalanItem[]
+  nama_pemberi?: string
+  nama_penerima?: string
+  tanggal_diterima?: string
 }
 
 // Helper: parse evidence_paths (JSON array string atau CSV) -> string[]
@@ -509,6 +569,42 @@ export const inventoryService = {
   getStockOutsByMandor: async (mandorId: number) => {
     const response = await apiClient.get(API_ENDPOINTS.INVENTORY.STOCK_OUT.GET_BY_MANDOR(mandorId))
     return extractData(response)
+  },
+
+  getStockOutByNomor: async (nomor: string) => {
+    const response = await apiClient.get(API_ENDPOINTS.INVENTORY.STOCK_OUT.GET_BY_NOMOR(nomor))
+    return extractData(response)
+  },
+
+  getUniqueStockOutNumbers: async () => {
+    // Mengambil semua stock out dengan pagination untuk mendapatkan unique nomor
+    const allItems: StockOut[] = []
+    let page = 1
+    const limit = 1000 // Maksimum limit yang diizinkan
+    let hasMore = true
+
+    while (hasMore) {
+      const query = buildPaginationQuery(page, limit, {})
+      const response = await apiClient.get(`${API_ENDPOINTS.INVENTORY.STOCK_OUT.GET_ALL}${query}`)
+      const data = extractData(response)
+      const items = extractItems<StockOut>(data)
+      
+      if (items.length === 0) {
+        hasMore = false
+      } else {
+        allItems.push(...items)
+        // Jika jumlah items kurang dari limit, berarti sudah di halaman terakhir
+        if (items.length < limit) {
+          hasMore = false
+        } else {
+          page++
+        }
+      }
+    }
+
+    // Extract unique nomor_barang_keluar
+    const uniqueNumbers = Array.from(new Set(allItems.map(item => item.nomor_barang_keluar)))
+    return uniqueNumbers.sort().reverse() // Sort descending untuk menampilkan yang terbaru di atas
   },
 
   createStockOut: async (
@@ -763,6 +859,34 @@ export const inventoryService = {
 
   createSuratPermintaan: async (data: SuratPermintaanCreateRequest) => {
     const response = await apiClient.post(API_ENDPOINTS.INVENTORY.SURAT_PERMINTAAN.CREATE, data)
+    return extractData(response)
+  },
+
+  // Surat Jalan
+  getSuratJalans: async (page = 1, limit = 10, search?: string, startDate?: string, endDate?: string) => {
+    const query = buildPaginationQuery(page, limit, { search, start_date: startDate, end_date: endDate })
+    const response = await apiClient.get(`${API_ENDPOINTS.INVENTORY.SURAT_JALAN.GET_ALL}${query}`)
+    // Return response lengkap dengan meta untuk pagination
+    return response?.data || response
+  },
+
+  getSuratJalan: async (id: number) => {
+    const response = await apiClient.get(API_ENDPOINTS.INVENTORY.SURAT_JALAN.GET_BY_ID(id))
+    return extractData(response)
+  },
+
+  createSuratJalan: async (data: SuratJalanCreateRequest) => {
+    const response = await apiClient.post(API_ENDPOINTS.INVENTORY.SURAT_JALAN.CREATE, data)
+    return extractData(response)
+  },
+
+  updateSuratJalan: async (id: number, data: SuratJalanUpdateRequest) => {
+    const response = await apiClient.put(API_ENDPOINTS.INVENTORY.SURAT_JALAN.UPDATE(id), data)
+    return extractData(response)
+  },
+
+  deleteSuratJalan: async (id: number) => {
+    const response = await apiClient.delete(API_ENDPOINTS.INVENTORY.SURAT_JALAN.DELETE(id))
     return extractData(response)
   },
 }
