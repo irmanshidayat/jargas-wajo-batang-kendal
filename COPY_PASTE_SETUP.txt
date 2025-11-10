@@ -1,0 +1,46 @@
+==========================================
+🚀 SETUP NGINX HOST - COPY PASTE KE SSH
+==========================================
+
+Jalankan perintah berikut di server SSH Anda (copy semua sekaligus):
+
+--------------------------------------------------------------------
+
+cd ~/jargas-wajo-batang-kendal && \
+sudo cp nginx-host/jargas.conf /etc/nginx/sites-available/jargas && \
+sudo ln -sf /etc/nginx/sites-available/jargas /etc/nginx/sites-enabled/jargas && \
+sudo rm -f /etc/nginx/sites-enabled/default && \
+sudo nginx -t && \
+sudo systemctl reload nginx && \
+echo "✅ Setup selesai!" && \
+echo "" && \
+echo "Test dengan: curl http://localhost/health"
+
+--------------------------------------------------------------------
+
+ATAU gunakan script otomatis:
+
+bash nginx-host/run-setup.sh
+
+--------------------------------------------------------------------
+
+SETELAH SETUP:
+
+1. Rebuild container frontend:
+   docker-compose build frontend
+   docker-compose up -d frontend
+
+2. Test:
+   curl http://localhost/health
+   curl http://localhost/
+
+3. Edit domain (jika ada):
+   sudo nano /etc/nginx/sites-available/jargas
+   (ubah server_name _; menjadi domain Anda)
+
+4. Setup SSL (jika ada domain):
+   sudo apt install certbot python3-certbot-nginx -y
+   sudo certbot --nginx -d your-domain.com
+
+==========================================
+
