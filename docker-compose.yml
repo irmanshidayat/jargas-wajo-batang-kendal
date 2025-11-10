@@ -41,7 +41,7 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       DEBUG: ${DEBUG:-False}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
-      AUTO_MIGRATE: ${AUTO_MIGRATE:-False}
+      AUTO_MIGRATE: ${AUTO_MIGRATE:-True}
       AUTO_MIGRATE_ONLY_IF_PENDING: ${AUTO_MIGRATE_ONLY_IF_PENDING:-True}
       TZ: Asia/Jakarta
     ports:

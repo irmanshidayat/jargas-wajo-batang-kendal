@@ -291,7 +291,22 @@ docker-compose up -d
 
 Setelah kode diupdate, rebuild container:
 
-### Rebuild Semua Services
+### Rebuild Semua Services (Dengan Auto-Migration)
+
+**Best Practice:** Gunakan script deployment otomatis yang sudah include migration:
+
+```powershell
+# Dari Windows PowerShell
+.\scripts\deploy-with-migration.ps1
+```
+
+Script ini akan:
+1. Pull kode terbaru dari Git
+2. Rebuild Docker containers
+3. Start containers (migration otomatis berjalan)
+4. Verifikasi migration dan tabel database
+
+### Rebuild Manual
 
 ```bash
 # Di server SSH
@@ -303,9 +318,11 @@ docker-compose down
 # Build tanpa cache
 docker-compose build --no-cache
 
-# Start containers
+# Start containers (migration akan otomatis berjalan karena AUTO_MIGRATE=True)
 docker-compose up -d
 ```
+
+**Catatan:** Migration akan otomatis berjalan saat backend start karena `AUTO_MIGRATE=True` (default di docker-compose.yml).
 
 ### Rebuild Service Tertentu
 
@@ -375,6 +392,24 @@ curl http://localhost/api/v1/health
 - Backend API: `http://72.61.142.109:8001/api/v1/health`
 - Adminer: `http://72.61.142.109:8081`
 
+### 5. Verifikasi Database Migration
+
+```bash
+# Cek log migration di backend
+docker-compose logs backend | grep -i migration
+
+# Atau di PowerShell
+docker-compose logs backend | Select-String -Pattern "migration" -CaseSensitive:$false
+
+# Cek status migration saat ini
+docker-compose exec backend alembic current
+
+# Verifikasi tabel sudah dibuat
+docker-compose exec mysql mysql -u root -padmin123 jargas_apbn -e "SHOW TABLES;"
+```
+
+**Catatan:** Migration otomatis berjalan saat backend start karena `AUTO_MIGRATE=True` (default di docker-compose.yml).
+
 ---
 
 ## 🔧 Troubleshooting
@@ -443,6 +478,55 @@ git remote -v
 git fetch origin
 git reset --hard origin/main
 ```
+
+### ❌ Database migration tidak jalan atau database kosong
+
+**Penyebab:**
+- Auto-migrate belum aktif (AUTO_MIGRATE=False)
+- Migration belum pernah dijalankan
+- Backend container belum start dengan benar
+
+**Solusi:**
+
+1. **Auto-migrate sudah aktif secara default** (AUTO_MIGRATE=True di docker-compose.yml). Jika tidak berjalan:
+   ```bash
+   # Cek log backend untuk melihat migration status
+   docker-compose logs backend | grep -i migration
+   
+   # Atau di PowerShell
+   docker-compose logs backend | Select-String -Pattern "migration" -CaseSensitive:$false
+   
+   # Pastikan backend container sudah running
+   docker-compose ps
+   ```
+
+2. **Jalankan migration manual** (jika auto-migrate gagal):
+   ```bash
+   # Dari server SSH
+   docker-compose exec backend alembic upgrade head
+   
+   # Atau dari Windows PowerShell
+   .\scripts\run-migration-server.ps1
+   ```
+
+3. **Check migration status**:
+   ```bash
+   docker-compose exec backend alembic current
+   docker-compose exec backend alembic history
+   ```
+
+4. **Verifikasi tabel sudah dibuat**:
+   ```bash
+   docker-compose exec mysql mysql -u root -padmin123 jargas_apbn -e "SHOW TABLES;"
+   ```
+
+5. **Restart backend** (jika perlu):
+   ```bash
+   docker-compose restart backend
+   # Tunggu beberapa detik, migration akan otomatis berjalan
+   ```
+
+**Catatan:** Migration otomatis berjalan saat backend start. Jika database masih kosong setelah restart, gunakan script manual di atas.
 
 ---
 

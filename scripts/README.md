@@ -61,10 +61,89 @@ $env:GITHUB_USERNAME = "your-username"
 
 ---
 
+### `deploy-with-migration.ps1`
+
+Script PowerShell untuk deployment lengkap dengan auto-migration ke server VPS.
+
+**Fitur:**
+- Pull kode terbaru dari Git
+- Rebuild Docker containers
+- Start containers (migration otomatis berjalan)
+- Verifikasi migration dan tabel database
+- Health check endpoint
+
+**Syarat:**
+- SSH access ke server
+- OpenSSH Client terinstall di Windows
+- Project sudah ada di server
+
+**Cara Menggunakan:**
+
+```powershell
+# Dengan default settings (72.61.142.109, root, ~/jargas-wajo-batang-kendal)
+.\scripts\deploy-with-migration.ps1
+
+# Dengan custom settings
+.\scripts\deploy-with-migration.ps1 -ServerIP "192.168.1.100" -Username "admin" -ProjectPath "~/my-project"
+```
+
+**Parameter:**
+- `-ServerIP` (Optional): IP atau domain server (default: "72.61.142.109")
+- `-Username` (Optional): Username SSH (default: "root")
+- `-ProjectPath` (Optional): Path project di server (default: "~/jargas-wajo-batang-kendal")
+
+---
+
+### `run-migration-server.ps1`
+
+Script PowerShell untuk menjalankan migration manual di server (jika auto-migrate tidak berjalan).
+
+**Cara Menggunakan:**
+
+```powershell
+# Dengan default settings
+.\scripts\run-migration-server.ps1
+
+# Dengan custom settings
+.\scripts\run-migration-server.ps1 -ServerIP "192.168.1.100" -Username "admin" -ProjectPath "~/my-project"
+```
+
+**Parameter:**
+- `-ServerIP` (Optional): IP atau domain server (default: "72.61.142.109")
+- `-Username` (Optional): Username SSH (default: "root")
+- `-ProjectPath` (Optional): Path project di server (default: "~/jargas-wajo-batang-kendal")
+
+---
+
+### `run-migration-server.sh`
+
+Script Bash untuk menjalankan migration manual di server (untuk dijalankan langsung di server via SSH).
+
+**Cara Menggunakan:**
+
+```bash
+# Di server SSH
+cd ~/jargas-wajo-batang-kendal
+bash scripts/run-migration-server.sh
+
+# Atau dengan custom path
+bash scripts/run-migration-server.sh ~/custom-path
+```
+
+**Catatan:** Script ini akan:
+1. Cek status migration saat ini
+2. Jalankan migration ke head
+3. Verifikasi migration berhasil
+4. Verifikasi tabel database sudah dibuat
+
+---
+
 ## 📚 Dokumentasi Lengkap
 
-Untuk dokumentasi lengkap tentang GHCR, lihat:
-- [GHCR_SETUP.md](../Catatan%20Penting/GHCR_SETUP.md)
+Untuk dokumentasi lengkap, lihat:
+- [DEPLOYMENT.md](../Catatan%20Penting/DEPLOYMENT.md) - Deployment guide
+- [DOCKER_SETUP.md](../Catatan%20Penting/DOCKER_SETUP.md) - Docker setup
+- [GHCR_SETUP.md](../Catatan%20Penting/GHCR_SETUP.md) - GHCR setup
 
 ---
 
@@ -74,4 +153,6 @@ Untuk dokumentasi lengkap tentang GHCR, lihat:
 2. **Docker Running**: Pastikan Docker Desktop berjalan sebelum menjalankan script
 3. **Network**: Pastikan koneksi internet stabil untuk push images
 4. **Permissions**: Pastikan token memiliki permission yang diperlukan
+5. **Auto-Migration**: Migration otomatis berjalan saat backend start (AUTO_MIGRATE=True di docker-compose.yml)
+6. **SSH Access**: Pastikan SSH key sudah di-setup atau password sudah benar
 
