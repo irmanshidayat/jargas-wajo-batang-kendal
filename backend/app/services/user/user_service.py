@@ -1,5 +1,7 @@
 from typing import Optional, List, Dict, Any
+import logging
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.repositories.user.user_repository import UserRepository
 from app.repositories.user.role_repository import RoleRepository
 from app.schemas.user.request import (
@@ -180,82 +182,152 @@ class UserService:
 
     def delete(self, user_id: int) -> bool:
         """Delete user dengan menangani foreign key constraints"""
-        user = self.repository.get(user_id)
-        if not user:
-            raise NotFoundError(f"User dengan ID {user_id} tidak ditemukan")
+        logger = logging.getLogger(__name__)
         
-        # Prevent deleting superuser
-        if user.is_superuser:
-            raise ForbiddenError("Tidak dapat menghapus superuser")
-        
-        # Cari superuser pertama sebagai fallback untuk foreign key yang tidak nullable
-        fallback_user = self.db.query(self.repository.model).filter(
-            self.repository.model.is_superuser == True,
-            self.repository.model.id != user_id
-        ).first()
-        
-        if not fallback_user:
-            # Jika tidak ada superuser lain, cari user aktif pertama
+        try:
+            user = self.repository.get(user_id)
+            if not user:
+                raise NotFoundError(f"User dengan ID {user_id} tidak ditemukan")
+            
+            # Prevent deleting superuser
+            if user.is_superuser:
+                raise ForbiddenError("Tidak dapat menghapus superuser")
+            
+            # Cari superuser pertama sebagai fallback untuk foreign key yang tidak nullable
             fallback_user = self.db.query(self.repository.model).filter(
-                self.repository.model.id != user_id,
-                self.repository.model.is_active == True
+                self.repository.model.is_superuser == True,
+                self.repository.model.id != user_id
             ).first()
-        
-        if not fallback_user:
-            raise ValidationError("Tidak dapat menghapus user: tidak ada user lain yang dapat digunakan sebagai fallback")
-        
-        fallback_user_id = fallback_user.id
-        
-        # Update semua foreign key yang merujuk ke user ini
-        # StockIn
-        from app.models.inventory.stock_in import StockIn
-        self.db.query(StockIn).filter(StockIn.created_by == user_id).update({"created_by": fallback_user_id})
-        self.db.query(StockIn).filter(StockIn.updated_by == user_id).update({"updated_by": None})
-        self.db.query(StockIn).filter(StockIn.deleted_by == user_id).update({"deleted_by": None})
-        
-        # StockOut
-        from app.models.inventory.stock_out import StockOut
-        self.db.query(StockOut).filter(StockOut.created_by == user_id).update({"created_by": fallback_user_id})
-        self.db.query(StockOut).filter(StockOut.updated_by == user_id).update({"updated_by": None})
-        self.db.query(StockOut).filter(StockOut.deleted_by == user_id).update({"deleted_by": None})
-        
-        # Installed
-        from app.models.inventory.installed import Installed
-        self.db.query(Installed).filter(Installed.created_by == user_id).update({"created_by": fallback_user_id})
-        self.db.query(Installed).filter(Installed.updated_by == user_id).update({"updated_by": None})
-        self.db.query(Installed).filter(Installed.deleted_by == user_id).update({"deleted_by": None})
-        
-        # Return
-        from app.models.inventory.return_model import Return
-        self.db.query(Return).filter(Return.created_by == user_id).update({"created_by": fallback_user_id})
-        self.db.query(Return).filter(Return.updated_by == user_id).update({"updated_by": None})
-        self.db.query(Return).filter(Return.deleted_by == user_id).update({"deleted_by": None})
-        
-        # SuratPermintaan
-        from app.models.inventory.surat_permintaan import SuratPermintaan
-        self.db.query(SuratPermintaan).filter(SuratPermintaan.created_by == user_id).update({"created_by": fallback_user_id})
-        self.db.query(SuratPermintaan).filter(SuratPermintaan.updated_by == user_id).update({"updated_by": None})
-        self.db.query(SuratPermintaan).filter(SuratPermintaan.deleted_by == user_id).update({"deleted_by": None})
-        
-        # SuratJalan
-        from app.models.inventory.surat_jalan import SuratJalan
-        self.db.query(SuratJalan).filter(SuratJalan.created_by == user_id).update({"created_by": fallback_user_id})
-        self.db.query(SuratJalan).filter(SuratJalan.updated_by == user_id).update({"updated_by": None})
-        self.db.query(SuratJalan).filter(SuratJalan.deleted_by == user_id).update({"deleted_by": None})
-        
-        # AuditLog
-        from app.models.inventory.audit_log import AuditLog
-        self.db.query(AuditLog).filter(AuditLog.user_id == user_id).update({"user_id": fallback_user_id})
-        
-        # Commit perubahan foreign key
-        self.db.commit()
-        
-        # Sekarang baru hapus user
-        result = self.repository.delete(user_id)
-        if not result:
-            raise ValidationError("Gagal menghapus user")
-        
-        return True
+            
+            if not fallback_user:
+                # Jika tidak ada superuser lain, cari user aktif pertama
+                fallback_user = self.db.query(self.repository.model).filter(
+                    self.repository.model.id != user_id,
+                    self.repository.model.is_active == True
+                ).first()
+            
+            if not fallback_user:
+                raise ValidationError("Tidak dapat menghapus user: tidak ada user lain yang dapat digunakan sebagai fallback")
+            
+            fallback_user_id = fallback_user.id
+            
+            logger.info(f"Menghapus user ID {user_id}, menggunakan fallback user ID {fallback_user_id}")
+            
+            # Update semua foreign key yang merujuk ke user ini
+            try:
+                # Helper untuk update kolom wajib (harus berhasil agar FK tidak menghalangi delete)
+                def update_required(model, filter_expr, update_dict, label: str):
+                    try:
+                        count_local = self.db.query(model).filter(filter_expr).update(update_dict)
+                        logger.info(f"Updated {count_local} {label} records (required)")
+                    except Exception as ex:
+                        # Jika gagal pada kolom/relasi wajib, bubble up agar ketahuan jelas
+                        logger.error(f"Gagal update wajib {label}: {str(ex)}", exc_info=True)
+                        raise
+
+                # Helper untuk update kolom opsional (jika kolom tidak ada / mismatch skema, jangan gagalkan proses)
+                def update_optional(model, filter_expr, update_dict, label: str):
+                    try:
+                        self.db.query(model).filter(filter_expr).update(update_dict)
+                        logger.info(f"Updated optional {label}")
+                    except Exception as ex:
+                        logger.warning(f"Lewati optional update {label} karena error: {str(ex)}")
+
+                # Import model-model terkait
+                from app.models.inventory.stock_in import StockIn
+                from app.models.inventory.stock_out import StockOut
+                from app.models.inventory.installed import Installed
+                from app.models.inventory.return_model import Return
+                from app.models.inventory.surat_permintaan import SuratPermintaan
+                from app.models.inventory.surat_jalan import SuratJalan
+                from app.models.inventory.audit_log import AuditLog
+                from app.models.project.user_project import UserProject
+                from app.models.user.user_permission import UserPermission
+                from app.models.user.user_menu_preference import UserMenuPreference
+
+                # Kolom wajib: created_by dan audit_logs.user_id
+                update_required(StockIn, StockIn.created_by == user_id, {"created_by": fallback_user_id}, "StockIn(created_by)")
+                update_optional(StockIn, StockIn.updated_by == user_id, {"updated_by": None}, "StockIn(updated_by)")
+                update_optional(StockIn, StockIn.deleted_by == user_id, {"deleted_by": None}, "StockIn(deleted_by)")
+
+                update_required(StockOut, StockOut.created_by == user_id, {"created_by": fallback_user_id}, "StockOut(created_by)")
+                update_optional(StockOut, StockOut.updated_by == user_id, {"updated_by": None}, "StockOut(updated_by)")
+                update_optional(StockOut, StockOut.deleted_by == user_id, {"deleted_by": None}, "StockOut(deleted_by)")
+
+                update_required(Installed, Installed.created_by == user_id, {"created_by": fallback_user_id}, "Installed(created_by)")
+                update_optional(Installed, Installed.updated_by == user_id, {"updated_by": None}, "Installed(updated_by)")
+                update_optional(Installed, Installed.deleted_by == user_id, {"deleted_by": None}, "Installed(deleted_by)")
+
+                update_required(Return, Return.created_by == user_id, {"created_by": fallback_user_id}, "Return(created_by)")
+                update_optional(Return, Return.updated_by == user_id, {"updated_by": None}, "Return(updated_by)")
+                update_optional(Return, Return.deleted_by == user_id, {"deleted_by": None}, "Return(deleted_by)")
+
+                update_required(SuratPermintaan, SuratPermintaan.created_by == user_id, {"created_by": fallback_user_id}, "SuratPermintaan(created_by)")
+                update_optional(SuratPermintaan, SuratPermintaan.updated_by == user_id, {"updated_by": None}, "SuratPermintaan(updated_by)")
+                update_optional(SuratPermintaan, SuratPermintaan.deleted_by == user_id, {"deleted_by": None}, "SuratPermintaan(deleted_by)")
+
+                update_required(SuratJalan, SuratJalan.created_by == user_id, {"created_by": fallback_user_id}, "SuratJalan(created_by)")
+                update_optional(SuratJalan, SuratJalan.updated_by == user_id, {"updated_by": None}, "SuratJalan(updated_by)")
+                update_optional(SuratJalan, SuratJalan.deleted_by == user_id, {"deleted_by": None}, "SuratJalan(deleted_by)")
+
+                # AuditLog (wajib)
+                update_required(AuditLog, AuditLog.user_id == user_id, {"user_id": fallback_user_id}, "AuditLog(user_id)")
+
+                # Tabel relasi (hapus baris, aman jika kosong)
+                try:
+                    count_up = self.db.query(UserProject).filter(UserProject.user_id == user_id).delete()
+                    logger.info(f"Deleted {count_up} UserProject records")
+                except Exception as ex:
+                    logger.warning(f"Lewati delete UserProject karena error: {str(ex)}")
+
+                try:
+                    count_perm = self.db.query(UserPermission).filter(UserPermission.user_id == user_id).delete()
+                    logger.info(f"Deleted {count_perm} UserPermission records")
+                except Exception as ex:
+                    logger.warning(f"Lewati delete UserPermission karena error: {str(ex)}")
+
+                try:
+                    count_pref = self.db.query(UserMenuPreference).filter(UserMenuPreference.user_id == user_id).delete()
+                    logger.info(f"Deleted {count_pref} UserMenuPreference records")
+                except Exception as ex:
+                    logger.warning(f"Lewati delete UserMenuPreference karena error: {str(ex)}")
+
+                # Commit perubahan foreign key
+                self.db.commit()
+                logger.info(f"Foreign key constraints berhasil diupdate untuk user ID {user_id}")
+
+            except Exception as e:
+                self.db.rollback()
+                logger.error(f"Error saat update foreign key untuk user ID {user_id}: {str(e)}", exc_info=True)
+                raise
+            
+            # Sekarang baru hapus user (repository.delete sudah commit sendiri)
+            try:
+                result = self.repository.delete(user_id)
+                if not result:
+                    raise ValidationError("Gagal menghapus user")
+                logger.info(f"User ID {user_id} berhasil dihapus")
+            except Exception as e:
+                logger.error(f"Error saat delete user ID {user_id}: {str(e)}", exc_info=True)
+                raise
+            
+            return True
+            
+        except (NotFoundError, ForbiddenError, ValidationError):
+            # Re-raise custom exceptions
+            raise
+        except IntegrityError as e:
+            self.db.rollback()
+            logger.error(f"Integrity error saat menghapus user ID {user_id}: {str(e)}", exc_info=True)
+            raise ValidationError(f"Gagal menghapus user: terdapat constraint database yang dilanggar. Detail: {str(e)}")
+        except SQLAlchemyError as e:
+            self.db.rollback()
+            logger.error(f"Database error saat menghapus user ID {user_id}: {str(e)}", exc_info=True)
+            raise ValidationError(f"Gagal menghapus user: terjadi kesalahan pada database. Detail: {str(e)}")
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Unexpected error saat menghapus user ID {user_id}: {str(e)}", exc_info=True)
+            raise ValidationError(f"Gagal menghapus user: {str(e)}")
 
     def update_password(
         self,

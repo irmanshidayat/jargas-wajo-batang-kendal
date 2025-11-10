@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, Query, status, Response
+import logging
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from typing import Optional
 from app.config.database import get_db
 from app.services.user.user_service import UserService
@@ -12,8 +14,8 @@ from app.schemas.user.request import (
 from app.schemas.user.response import UserResponse, UserListResponse
 from app.core.security import get_current_user
 from app.models.user.user import User
-from app.utils.response import success_response, paginated_response
-from app.core.exceptions import ForbiddenError
+from app.utils.response import success_response, paginated_response, error_response
+from app.core.exceptions import ForbiddenError, NotFoundError, ValidationError
 from app.api.v1.deps import check_superuser
 
 router = APIRouter()
@@ -179,17 +181,45 @@ async def delete_user(
     response: Response = None
 ):
     """Delete user"""
-    check_superuser(current_user)
+    logger = logging.getLogger(__name__)
     
-    # Prevent self-deletion
-    if current_user.id == user_id:
-        raise ForbiddenError("Tidak dapat menghapus akun sendiri")
-    
-    user_service = UserService(db)
-    user_service.delete(user_id)
-    
-    # Return 204 No Content
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    try:
+        check_superuser(current_user)
+        
+        # Prevent self-deletion
+        if current_user.id == user_id:
+            raise ForbiddenError("Tidak dapat menghapus akun sendiri")
+        
+        user_service = UserService(db)
+        user_service.delete(user_id)
+        
+        # Return 204 No Content
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+        
+    except (ForbiddenError, NotFoundError, ValidationError) as e:
+        # Re-raise custom exceptions untuk ditangani oleh exception handler
+        raise
+    except IntegrityError as e:
+        logger.error(f"Integrity error saat menghapus user ID {user_id}: {str(e)}", exc_info=True)
+        db.rollback()
+        return error_response(
+            message=f"Gagal menghapus user: terdapat constraint database yang dilanggar",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+    except SQLAlchemyError as e:
+        logger.error(f"Database error saat menghapus user ID {user_id}: {str(e)}", exc_info=True)
+        db.rollback()
+        return error_response(
+            message="Terjadi kesalahan pada database saat menghapus user",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error saat menghapus user ID {user_id}: {str(e)}", exc_info=True)
+        db.rollback()
+        return error_response(
+            message=f"Gagal menghapus user: {str(e)}",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @router.patch(
