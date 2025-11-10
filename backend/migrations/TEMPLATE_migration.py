@@ -13,10 +13,30 @@ Jangan biarkan file template di folder versions/ karena akan menyebabkan error.
 
 import logging
 from typing import Sequence, Union
+from pathlib import Path
+import sys
 
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import inspect, text
+
+# Add migrations directory to path untuk import utils
+migrations_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(migrations_dir.parent))
+
+from migrations.utils import (
+    table_exists,
+    column_exists,
+    index_exists,
+    foreign_key_exists,
+    safe_add_column,
+    safe_drop_column,
+    safe_create_index,
+    safe_drop_index,
+    get_table_columns,
+    get_table_indexes,
+    validate_migration_prerequisites
+)
 
 # Setup logger untuk migration
 logger = logging.getLogger(__name__)
@@ -31,31 +51,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 # ============================================================================
-# HELPER FUNCTIONS (Optional - bisa dipindah ke file terpisah untuk reusability)
-# ============================================================================
-
-def table_exists(inspector, table_name: str) -> bool:
-    """Check if table exists"""
-    return table_name in inspector.get_table_names()
-
-
-def column_exists(inspector, table_name: str, column_name: str) -> bool:
-    """Check if column exists in table"""
-    if not table_exists(inspector, table_name):
-        return False
-    existing_columns = [col['name'] for col in inspector.get_columns(table_name)]
-    return column_name in existing_columns
-
-
-def index_exists(inspector, table_name: str, index_name: str) -> bool:
-    """Check if index exists"""
-    if not table_exists(inspector, table_name):
-        return False
-    existing_indexes = [idx['name'] for idx in inspector.get_indexes(table_name)]
-    return index_name in existing_indexes
-
-
-# ============================================================================
 # UPGRADE FUNCTION
 # ============================================================================
 
@@ -64,45 +59,42 @@ def upgrade() -> None:
     Upgrade: Deskripsi perubahan yang dilakukan
     
     Best Practice Checklist:
-    - [ ] Safety checks lengkap (table/column exists)
-    - [ ] Idempotent (bisa dijalankan berulang)
-    - [ ] Error handling dengan logging
+    - [ ] Gunakan fungsi dari migrations.utils untuk konsistensi
+    - [ ] Safety checks lengkap (table/column exists) - sudah ada di utils
+    - [ ] Idempotent (bisa dijalankan berulang) - sudah ada di utils
+    - [ ] Error handling dengan logging - sudah ada di utils
     - [ ] Nullable columns untuk backward compatibility
     - [ ] Data migration jika perlu
     """
+    logger.info(f"Starting migration: {revision}")
     connection = op.get_bind()
     inspector = inspect(connection)
     
     # ========================================================================
-    # PATTERN 1: Add Column
+    # PATTERN 1: Add Column (Menggunakan safe_add_column dari utils)
     # ========================================================================
     table_name = 'your_table_name'
     column_name = 'new_column'
     
-    if not table_exists(inspector, table_name):
-        logger.warning(f"Table '{table_name}' tidak ditemukan, skip migration")
-        return
-    
-    if not column_exists(inspector, table_name, column_name):
-        try:
-            op.add_column(
-                table_name,
-                sa.Column(column_name, sa.String(255), nullable=True)
-            )
-            logger.info(f"✅ Berhasil menambahkan kolom '{column_name}'")
-        except Exception as e:
-            logger.error(f"❌ Error menambahkan kolom '{column_name}': {str(e)}")
-            if 'duplicate column' not in str(e).lower():
-                raise
-    else:
-        logger.info(f"Kolom '{column_name}' sudah ada, skip")
+    # safe_add_column sudah melakukan safety check (idempotent)
+    safe_add_column(
+        inspector,
+        table_name,
+        column_name,
+        sa.String(255),
+        nullable=True
+    )
     
     # ========================================================================
-    # PATTERN 2: Add Column dengan Default Value
+    # PATTERN 2: Add Column dengan Default Value (Menggunakan safe_add_column)
     # ========================================================================
-    # op.add_column(
+    # safe_add_column(
+    #     inspector,
     #     table_name,
-    #     sa.Column('status', sa.String(50), nullable=False, server_default='active')
+    #     'status',
+    #     sa.String(50),
+    #     nullable=False,
+    #     server_default='active'
     # )
     
     # ========================================================================
@@ -119,21 +111,28 @@ def upgrade() -> None:
     #     )
     
     # ========================================================================
-    # PATTERN 4: Add Index
+    # PATTERN 4: Add Index (Menggunakan safe_create_index dari utils)
     # ========================================================================
     # index_name = f'ix_{table_name}_{column_name}'
-    # if not index_exists(inspector, table_name, index_name):
-    #     try:
-    #         op.create_index(index_name, table_name, [column_name], unique=False)
-    #         logger.info(f"✅ Berhasil membuat index '{index_name}'")
-    #     except Exception as e:
-    #         logger.error(f"❌ Error membuat index '{index_name}': {str(e)}")
+    # safe_create_index(
+    #     inspector,
+    #     table_name,
+    #     index_name,
+    #     [column_name],
+    #     unique=False
+    # )
     
     # ========================================================================
     # PATTERN 5: Data Migration
     # ========================================================================
-    # # Step 1: Add column nullable
-    # op.add_column(table_name, sa.Column('new_field', sa.String(255), nullable=True))
+    # # Step 1: Add column nullable (menggunakan safe_add_column)
+    # safe_add_column(
+    #     inspector,
+    #     table_name,
+    #     'new_field',
+    #     sa.String(255),
+    #     nullable=True
+    # )
     # 
     # # Step 2: Migrate existing data
     # connection.execute(text("""
@@ -143,7 +142,8 @@ def upgrade() -> None:
     # """))
     # 
     # # Step 3: Make NOT NULL (setelah data di-migrate)
-    # op.alter_column(table_name, 'new_field', nullable=False)
+    # if column_exists(inspector, table_name, 'new_field'):
+    #     op.alter_column(table_name, 'new_field', nullable=False)
     
     # ========================================================================
     # PATTERN 6: Create Table
@@ -167,6 +167,8 @@ def upgrade() -> None:
     #     ['foreign_id'],
     #     ['id']
     # )
+    
+    logger.info("✅ Migration completed successfully")
 
 
 # ============================================================================
@@ -178,46 +180,31 @@ def downgrade() -> None:
     Downgrade: Rollback perubahan yang dilakukan di upgrade()
     
     Best Practice:
+    - [ ] Gunakan fungsi dari migrations.utils untuk konsistensi
     - [ ] Reverse order dari upgrade (LIFO - Last In First Out)
-    - [ ] Safety checks lengkap
-    - [ ] Error handling dengan logging
+    - [ ] Safety checks lengkap - sudah ada di utils
+    - [ ] Error handling dengan logging - sudah ada di utils
     - [ ] Backup data jika perlu sebelum drop
     """
+    logger.info(f"Starting downgrade: {revision}")
     connection = op.get_bind()
     inspector = inspect(connection)
     
     table_name = 'your_table_name'
     column_name = 'new_column'
     
-    # Safety check
-    if not table_exists(inspector, table_name):
-        logger.warning(f"Table '{table_name}' tidak ditemukan, skip downgrade")
-        return
+    # ========================================================================
+    # PATTERN 1: Drop Column (Menggunakan safe_drop_column dari utils)
+    # Reverse order dari upgrade (LIFO - Last In First Out)
+    # ========================================================================
+    # safe_drop_column sudah melakukan safety check (idempotent)
+    safe_drop_column(inspector, table_name, column_name)
     
     # ========================================================================
-    # PATTERN 1: Drop Column (reverse order dari upgrade)
-    # ========================================================================
-    if column_exists(inspector, table_name, column_name):
-        try:
-            op.drop_column(table_name, column_name)
-            logger.info(f"✅ Berhasil menghapus kolom '{column_name}'")
-        except Exception as e:
-            logger.error(f"❌ Error menghapus kolom '{column_name}': {str(e)}")
-            if 'unknown column' not in str(e).lower():
-                raise
-    else:
-        logger.info(f"Kolom '{column_name}' tidak ada, skip")
-    
-    # ========================================================================
-    # PATTERN 2: Drop Index
+    # PATTERN 2: Drop Index (Menggunakan safe_drop_index dari utils)
     # ========================================================================
     # index_name = f'ix_{table_name}_{column_name}'
-    # if index_exists(inspector, table_name, index_name):
-    #     try:
-    #         op.drop_index(index_name, table_name=table_name)
-    #         logger.info(f"✅ Berhasil menghapus index '{index_name}'")
-    #     except Exception as e:
-    #         logger.error(f"❌ Error menghapus index '{index_name}': {str(e)}")
+    # safe_drop_index(inspector, table_name, index_name)
     
     # ========================================================================
     # PATTERN 3: Drop Foreign Key
@@ -242,4 +229,6 @@ def downgrade() -> None:
     # 
     # # Drop column
     # op.drop_column('your_table', 'column_to_drop')
+    
+    logger.info("✅ Downgrade completed successfully")
 

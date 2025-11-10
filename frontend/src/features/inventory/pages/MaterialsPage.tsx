@@ -213,29 +213,54 @@ export default function MaterialsPage() {
       setImporting(true)
       const response = await inventoryService.bulkImportMaterials(importFile)
 
-      const result = response.data || {}
+      // extractData sudah mengembalikan data langsung dari backend response
+      // Backend response: { success, message, data: { success_count, ... } }
+      // extractData mengembalikan: { success_count, ... }
+      const result = response || {}
       const successCount = result.success_count || 0
-      const failedCount = result.failed_count || 0
-      const errors = result.errors || []
+      const validationFailedCount = result.validation_failed_count || 0
+      const processingFailedCount = result.processing_failed_count || 0
+      const validationErrors = result.validation_errors || []
+      const processingErrors = result.processing_errors || []
+      const allErrors = result.errors || [] // Backward compatibility
 
       let htmlMessage = `<div style="text-align: left;">`
       htmlMessage += `<p><strong>Hasil Import:</strong></p>`
       htmlMessage += `<ul>`
       htmlMessage += `<li>Sukses: <strong>${successCount}</strong> material</li>`
-      htmlMessage += `<li>Gagal: <strong>${failedCount}</strong> material</li>`
+      
+      if (validationFailedCount > 0) {
+        htmlMessage += `<li>Data tidak valid (tidak masuk database): <strong>${validationFailedCount}</strong> material</li>`
+      }
+      
+      if (processingFailedCount > 0) {
+        htmlMessage += `<li>Gagal saat insert: <strong>${processingFailedCount}</strong> material</li>`
+      }
+      
+      // Backward compatibility: jika menggunakan format lama
+      if (validationFailedCount === 0 && processingFailedCount === 0) {
+        const oldFailedCount = result.failed_count || 0
+        if (oldFailedCount > 0) {
+          htmlMessage += `<li>Gagal: <strong>${oldFailedCount}</strong> material</li>`
+        }
+      }
+      
       htmlMessage += `</ul>`
 
-      if (errors.length > 0 && errors.length <= 10) {
+      // Tampilkan errors jika ada
+      const errorsToShow = allErrors.length > 0 ? allErrors : [...validationErrors, ...processingErrors]
+      
+      if (errorsToShow.length > 0 && errorsToShow.length <= 10) {
         htmlMessage += `<p><strong>Detail Error:</strong></p>`
         htmlMessage += `<ul style="max-height: 200px; overflow-y: auto;">`
-        errors.forEach((error: string) => {
+        errorsToShow.forEach((error: string) => {
           htmlMessage += `<li style="font-size: 12px; margin-bottom: 5px;">${error}</li>`
         })
         htmlMessage += `</ul>`
-      } else if (errors.length > 10) {
-        htmlMessage += `<p><strong>Detail Error (menampilkan 10 pertama dari ${errors.length}):</strong></p>`
+      } else if (errorsToShow.length > 10) {
+        htmlMessage += `<p><strong>Detail Error (menampilkan 10 pertama dari ${errorsToShow.length}):</strong></p>`
         htmlMessage += `<ul style="max-height: 200px; overflow-y: auto;">`
-        errors.slice(0, 10).forEach((error: string) => {
+        errorsToShow.slice(0, 10).forEach((error: string) => {
           htmlMessage += `<li style="font-size: 12px; margin-bottom: 5px;">${error}</li>`
         })
         htmlMessage += `</ul>`
@@ -243,27 +268,46 @@ export default function MaterialsPage() {
 
       htmlMessage += `</div>`
 
-      if (successCount > 0 && failedCount === 0) {
-        await Swal.fire({
-          icon: 'success',
-          title: 'Import Berhasil',
-          html: htmlMessage,
-          confirmButtonText: 'OK',
-        })
-      } else if (successCount > 0 && failedCount > 0) {
-        await Swal.fire({
-          icon: 'warning',
-          title: 'Import Sebagian Berhasil',
-          html: htmlMessage,
-          confirmButtonText: 'OK',
-        })
+      // Logika notifikasi yang lebih akurat
+      // Jika ada data yang berhasil masuk, tampilkan success atau warning (bukan error)
+      if (successCount > 0) {
+        // Ada data yang berhasil masuk
+        if (validationFailedCount === 0 && processingFailedCount === 0) {
+          // Semua berhasil
+          await Swal.fire({
+            icon: 'success',
+            title: 'Import Berhasil',
+            html: htmlMessage,
+            confirmButtonText: 'OK',
+          })
+        } else {
+          // Sebagian berhasil
+          await Swal.fire({
+            icon: 'success',
+            title: 'Import Berhasil',
+            html: htmlMessage,
+            confirmButtonText: 'OK',
+          })
+        }
       } else {
-        await Swal.fire({
-          icon: 'error',
-          title: 'Import Gagal',
-          html: htmlMessage,
-          confirmButtonText: 'OK',
-        })
+        // Tidak ada yang berhasil masuk
+        if (validationFailedCount > 0 || processingFailedCount > 0) {
+          // Ada data yang gagal
+          await Swal.fire({
+            icon: 'error',
+            title: 'Import Gagal',
+            html: htmlMessage,
+            confirmButtonText: 'OK',
+          })
+        } else {
+          // Tidak ada data sama sekali
+          await Swal.fire({
+            icon: 'error',
+            title: 'Import Gagal',
+            html: htmlMessage,
+            confirmButtonText: 'OK',
+          })
+        }
       }
 
       // Reset dan refresh

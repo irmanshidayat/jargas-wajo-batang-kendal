@@ -408,8 +408,11 @@ async def bulk_import_materials(
             return success_response(
                 data={
                     'success_count': 0,
-                    'failed_count': len(rows_data),
-                    'errors': validation_errors
+                    'validation_failed_count': len(rows_data),
+                    'processing_failed_count': 0,
+                    'validation_errors': validation_errors,
+                    'processing_errors': [],
+                    'errors': validation_errors  # Backward compatibility
                 },
                 message="Tidak ada data yang valid",
                 status_code=status.HTTP_400_BAD_REQUEST
@@ -420,47 +423,76 @@ async def bulk_import_materials(
         result = material_service.bulk_create(validated_rows, project_id=project_id)
         logger.info(f"Bulk import result: {result['success_count']} sukses, {result['failed_count']} gagal, {len(result['errors'])} errors")
         
-        # Tambahkan validation errors ke result errors
-        if validation_errors:
-            result['errors'].extend(validation_errors)
-            result['failed_count'] += len(validation_errors)
-            logger.info(f"Added {len(validation_errors)} validation errors to result")
+        # Pisahkan validation errors dan processing errors
+        validation_failed_count = len(validation_errors)
+        processing_failed_count = result.get('failed_count', 0)
+        processing_errors = result.get('errors', [])
+        
+        # Gabungkan semua errors untuk backward compatibility
+        all_errors = validation_errors + processing_errors
         
         # Log semua errors untuk debugging
-        if result['errors']:
-            logger.warning(f"Bulk import errors: {result['errors']}")
+        if all_errors:
+            logger.warning(f"Bulk import errors: {all_errors}")
         
         # Audit log
         audit_service = AuditLogService(db)
+        total_failed = validation_failed_count + processing_failed_count
         audit_service.create_log(
             user_id=current_user.id,
             action=ActionType.CREATE,
             table_name="materials",
             record_id=0,  # Bulk operation, tidak punya single record_id
             new_values={"bulk_import": True, "file_name": file.filename},
-            description=f"Bulk import materials: {result['success_count']} sukses, {result['failed_count']} gagal"
+            description=f"Bulk import materials: {result['success_count']} sukses, {total_failed} gagal (validasi: {validation_failed_count}, proses: {processing_failed_count})"
         )
         
-        # Prepare response message
-        if result['success_count'] > 0 and result['failed_count'] == 0:
-            message = f"Berhasil mengimpor {result['success_count']} material"
-        elif result['success_count'] > 0 and result['failed_count'] > 0:
-            message = f"Berhasil mengimpor {result['success_count']} material, {result['failed_count']} gagal"
+        # Prepare response dengan struktur baru
+        response_data = {
+            'success_count': result['success_count'],
+            'validation_failed_count': validation_failed_count,
+            'processing_failed_count': processing_failed_count,
+            'validation_errors': validation_errors,
+            'processing_errors': processing_errors,
+            'errors': all_errors  # Backward compatibility
+        }
+        
+        # Prepare response message - fokus pada data yang berhasil masuk
+        if result['success_count'] > 0:
+            if validation_failed_count > 0 or processing_failed_count > 0:
+                message = f"Berhasil mengimpor {result['success_count']} material"
+                if validation_failed_count > 0:
+                    message += f", {validation_failed_count} data tidak valid (tidak masuk database)"
+                if processing_failed_count > 0:
+                    message += f", {processing_failed_count} data gagal saat insert"
+            else:
+                message = f"Berhasil mengimpor {result['success_count']} material"
         else:
-            message = f"Gagal mengimpor material. {result['failed_count']} data gagal"
+            # Tidak ada yang berhasil
+            if validation_failed_count > 0:
+                message = f"Gagal mengimpor: {validation_failed_count} data tidak valid"
+            elif processing_failed_count > 0:
+                message = f"Gagal mengimpor: {processing_failed_count} data gagal saat insert"
+            else:
+                message = "Gagal mengimpor material"
         
         return success_response(
-            data=result,
+            data=response_data,
             message=message,
             status_code=status.HTTP_200_OK
         )
         
     except Exception as e:
+        error_msg = f"Error: {str(e)}"
+        logger.error(f"Bulk import exception: {error_msg}", exc_info=True)
         return success_response(
             data={
                 'success_count': 0,
-                'failed_count': 0,
-                'errors': [f"Error: {str(e)}"]
+                'validation_failed_count': 0,
+                'processing_failed_count': 0,
+                'validation_errors': [],
+                'processing_errors': [],
+                'errors': [error_msg]  # Backward compatibility
             },
             message="Terjadi kesalahan saat memproses file",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR

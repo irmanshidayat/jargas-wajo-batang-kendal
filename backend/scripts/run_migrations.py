@@ -101,7 +101,7 @@ def main():
         help="Tampilkan versi migration saat ini"
     )
     parser.add_argument(
-        "--history", "-h",
+        "--history",
         action="store_true",
         help="Tampilkan history migration"
     )

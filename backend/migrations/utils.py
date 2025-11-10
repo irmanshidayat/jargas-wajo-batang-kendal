@@ -5,13 +5,16 @@ Fungsi-fungsi helper ini bisa digunakan di semua migration files
 untuk memastikan konsistensi dan mengurangi duplikasi code.
 """
 import logging
-from typing import List, Optional, Tuple
-from sqlalchemy import inspect, Engine, Connection
+from typing import List, Optional, Tuple, TYPE_CHECKING
+from sqlalchemy import inspect
+
+if TYPE_CHECKING:
+    from sqlalchemy.engine import Inspector
 
 logger = logging.getLogger(__name__)
 
 
-def table_exists(inspector: inspect.Inspector, table_name: str) -> bool:
+def table_exists(inspector: "Inspector", table_name: str) -> bool:
     """
     Check if table exists in database
     
@@ -30,7 +33,7 @@ def table_exists(inspector: inspect.Inspector, table_name: str) -> bool:
         return False
 
 
-def column_exists(inspector: inspect.Inspector, table_name: str, column_name: str) -> bool:
+def column_exists(inspector: "Inspector", table_name: str, column_name: str) -> bool:
     """
     Check if column exists in table
     
@@ -52,7 +55,7 @@ def column_exists(inspector: inspect.Inspector, table_name: str, column_name: st
         return False
 
 
-def index_exists(inspector: inspect.Inspector, table_name: str, index_name: str) -> bool:
+def index_exists(inspector: "Inspector", table_name: str, index_name: str) -> bool:
     """
     Check if index exists in table
     
@@ -74,7 +77,7 @@ def index_exists(inspector: inspect.Inspector, table_name: str, index_name: str)
         return False
 
 
-def foreign_key_exists(inspector: inspect.Inspector, table_name: str, fk_name: str) -> bool:
+def foreign_key_exists(inspector: "Inspector", table_name: str, fk_name: str) -> bool:
     """
     Check if foreign key constraint exists
     
@@ -96,7 +99,7 @@ def foreign_key_exists(inspector: inspect.Inspector, table_name: str, fk_name: s
         return False
 
 
-def get_table_columns(inspector: inspect.Inspector, table_name: str) -> List[str]:
+def get_table_columns(inspector: "Inspector", table_name: str) -> List[str]:
     """
     Get list of column names in table
     
@@ -116,7 +119,7 @@ def get_table_columns(inspector: inspect.Inspector, table_name: str) -> List[str
         return []
 
 
-def get_table_indexes(inspector: inspect.Inspector, table_name: str) -> List[str]:
+def get_table_indexes(inspector: "Inspector", table_name: str) -> List[str]:
     """
     Get list of index names in table
     
@@ -137,7 +140,7 @@ def get_table_indexes(inspector: inspect.Inspector, table_name: str) -> List[str
 
 
 def safe_add_column(
-    inspector: inspect.Inspector,
+    inspector: "Inspector",
     table_name: str,
     column_name: str,
     column_type,
@@ -185,7 +188,7 @@ def safe_add_column(
 
 
 def safe_drop_column(
-    inspector: inspect.Inspector,
+    inspector: "Inspector",
     table_name: str,
     column_name: str
 ) -> bool:
@@ -222,7 +225,7 @@ def safe_drop_column(
 
 
 def safe_create_index(
-    inspector: inspect.Inspector,
+    inspector: "Inspector",
     table_name: str,
     index_name: str,
     columns: List[str],
@@ -263,7 +266,7 @@ def safe_create_index(
 
 
 def safe_drop_index(
-    inspector: inspect.Inspector,
+    inspector: "Inspector",
     table_name: str,
     index_name: str
 ) -> bool:
@@ -298,7 +301,7 @@ def safe_drop_index(
 
 
 def validate_migration_prerequisites(
-    inspector: inspect.Inspector,
+    inspector: "Inspector",
     required_tables: List[str],
     required_columns: Optional[dict] = None
 ) -> Tuple[bool, List[str]]:
