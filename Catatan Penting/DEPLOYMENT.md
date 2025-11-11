@@ -604,7 +604,7 @@ docker-compose -f docker-compose.dev.yml exec mysql mysql -u root -padmin123 jar
 **Akses Aplikasi:**
 - ✅ Frontend: `https://devjargas.ptkiansantang.com`
 - ✅ Backend API: `https://devjargas.ptkiansantang.com/api/v1/health`
-- ✅ Adminer: `http://72.61.142.109:8083` (HTTP, internal)
+- ✅ Adminer: `https://devjargas.ptkiansantang.com:8083` (HTTPS)
 
 #### Troubleshooting Setup Awal
 
