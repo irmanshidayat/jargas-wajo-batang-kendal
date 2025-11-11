@@ -132,7 +132,101 @@ const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
     }
   }
 
-  // Group permissions by page
+  // Calculate CRUD status for each page based on selected permissions
+  const getPageCRUDStatus = (pageId: number) => {
+    const pagePermissions = permissions.filter((p) => p.page_id === pageId)
+    const selectedPagePermissions = pagePermissions.filter((p) => localSelectedIds.has(p.id))
+    
+    return {
+      can_create: selectedPagePermissions.some((p) => p.can_create),
+      can_read: selectedPagePermissions.some((p) => p.can_read),
+      can_update: selectedPagePermissions.some((p) => p.can_update),
+      can_delete: selectedPagePermissions.some((p) => p.can_delete),
+    }
+  }
+
+  // Handle CRUD toggle for a specific page
+  const handleCRUDToggle = (pageId: number, crudType: 'can_create' | 'can_read' | 'can_update' | 'can_delete', value: boolean) => {
+    const pagePermissions = permissions.filter((p) => p.page_id === pageId)
+    const currentStatus = getPageCRUDStatus(pageId)
+    const newStatus = { ...currentStatus, [crudType]: value }
+    
+    const newSelected = new Set(localSelectedIds)
+    
+    if (value) {
+      // Enabling CRUD: Find permission that matches the new status
+      // First try exact match
+      let targetPermission = pagePermissions.find(
+        (p) =>
+          p.can_create === newStatus.can_create &&
+          p.can_read === newStatus.can_read &&
+          p.can_update === newStatus.can_update &&
+          p.can_delete === newStatus.can_delete
+      )
+      
+      // If exact match not found, find permission that has the required flag and is closest to new status
+      if (!targetPermission) {
+        // Find permissions that have the required flag
+        const candidates = pagePermissions.filter((p) => p[crudType] === true)
+        
+        // Find the one that matches most of the other flags
+        targetPermission = candidates.find((p) => {
+          const matches = 
+            (p.can_create === newStatus.can_create || !newStatus.can_create) &&
+            (p.can_read === newStatus.can_read || !newStatus.can_read) &&
+            (p.can_update === newStatus.can_update || !newStatus.can_update) &&
+            (p.can_delete === newStatus.can_delete || !newStatus.can_delete)
+          return matches
+        })
+        
+        // If still not found, use the first candidate
+        if (!targetPermission && candidates.length > 0) {
+          targetPermission = candidates[0]
+        }
+      }
+      
+      // Remove all current permissions for this page
+      const selectedPagePermIds = pagePermissions
+        .filter((p) => localSelectedIds.has(p.id))
+        .map((p) => p.id)
+      selectedPagePermIds.forEach((id) => newSelected.delete(id))
+      
+      // Add the target permission
+      if (targetPermission) {
+        newSelected.add(targetPermission.id)
+      }
+    } else {
+      // Disabling CRUD: Remove all permissions that have this flag
+      const permissionsToRemove = pagePermissions
+        .filter((p) => p[crudType] === true && localSelectedIds.has(p.id))
+        .map((p) => p.id)
+      
+      permissionsToRemove.forEach((id) => newSelected.delete(id))
+      
+      // If there are still selected permissions, keep them
+      // Otherwise, try to find a permission that matches the new status (without the disabled flag)
+      const remainingSelected = pagePermissions.filter((p) => newSelected.has(p.id))
+      if (remainingSelected.length === 0) {
+        // Try to find a permission that matches the new status
+        const targetPermission = pagePermissions.find(
+          (p) =>
+            p.can_create === newStatus.can_create &&
+            p.can_read === newStatus.can_read &&
+            p.can_update === newStatus.can_update &&
+            p.can_delete === newStatus.can_delete
+        )
+        
+        if (targetPermission) {
+          newSelected.add(targetPermission.id)
+        }
+      }
+    }
+    
+    setLocalSelectedIds(newSelected)
+    onPermissionChange(Array.from(newSelected))
+  }
+
+  // Group permissions by page - one row per page
   const permissionsByPage = pages.map((page) => {
     const pagePermissions = permissions.filter((p) => p.page_id === page.id)
     return { page, permissions: pagePermissions }
@@ -175,100 +269,77 @@ const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
               {permissionsByPage.map(({ page, permissions: pagePerms }) => {
                 const showInMenu = userMenuPreferences.get(page.id) ?? true
                 const isUpdating = updatingPages.has(page.id)
+                const crudStatus = getPageCRUDStatus(page.id)
+                
+                // Check if page has any permissions available
+                const hasPermissions = pagePerms.length > 0
                 
                 return (
-                  <React.Fragment key={page.id}>
-                    {pagePerms.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="px-4 py-3 text-sm text-gray-500">
-                          {page.display_name} - Belum ada permissions
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <label className="relative inline-flex items-center cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={showInMenu}
-                              onChange={() => handleShowInMenuToggle(page.id)}
-                              disabled={isUpdating}
-                              className="sr-only peer"
-                            />
-                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600 disabled:opacity-50"></div>
-                          </label>
-                        </td>
-                      </tr>
-                    ) : (
-                      pagePerms.map((perm, index) => (
-                        <tr key={perm.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {page.display_name}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            {perm.can_create ? (
-                              <input
-                                type="checkbox"
-                                checked={localSelectedIds.has(perm.id)}
-                                onChange={() => handlePermissionToggle(perm.id)}
-                                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                              />
-                            ) : (
-                              <span className="text-gray-400">-</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            {perm.can_read ? (
-                              <input
-                                type="checkbox"
-                                checked={localSelectedIds.has(perm.id)}
-                                onChange={() => handlePermissionToggle(perm.id)}
-                                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                              />
-                            ) : (
-                              <span className="text-gray-400">-</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            {perm.can_update ? (
-                              <input
-                                type="checkbox"
-                                checked={localSelectedIds.has(perm.id)}
-                                onChange={() => handlePermissionToggle(perm.id)}
-                                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                              />
-                            ) : (
-                              <span className="text-gray-400">-</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            {perm.can_delete ? (
-                              <input
-                                type="checkbox"
-                                checked={localSelectedIds.has(perm.id)}
-                                onChange={() => handlePermissionToggle(perm.id)}
-                                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                              />
-                            ) : (
-                              <span className="text-gray-400">-</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            {index === 0 && (
-                              <label className="relative inline-flex items-center cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={showInMenu}
-                                  onChange={() => handleShowInMenuToggle(page.id)}
-                                  disabled={isUpdating}
-                                  className="sr-only peer"
-                                />
-                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600 disabled:opacity-50"></div>
-                              </label>
-                            )}
-                            {index > 0 && <span className="text-gray-400">-</span>}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </React.Fragment>
+                  <tr key={page.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {page.display_name}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {hasPermissions && pagePerms.some((p) => p.can_create) ? (
+                        <input
+                          type="checkbox"
+                          checked={crudStatus.can_create}
+                          onChange={(e) => handleCRUDToggle(page.id, 'can_create', e.target.checked)}
+                          className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                        />
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {hasPermissions && pagePerms.some((p) => p.can_read) ? (
+                        <input
+                          type="checkbox"
+                          checked={crudStatus.can_read}
+                          onChange={(e) => handleCRUDToggle(page.id, 'can_read', e.target.checked)}
+                          className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                        />
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {hasPermissions && pagePerms.some((p) => p.can_update) ? (
+                        <input
+                          type="checkbox"
+                          checked={crudStatus.can_update}
+                          onChange={(e) => handleCRUDToggle(page.id, 'can_update', e.target.checked)}
+                          className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                        />
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {hasPermissions && pagePerms.some((p) => p.can_delete) ? (
+                        <input
+                          type="checkbox"
+                          checked={crudStatus.can_delete}
+                          onChange={(e) => handleCRUDToggle(page.id, 'can_delete', e.target.checked)}
+                          className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                        />
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={showInMenu}
+                          onChange={() => handleShowInMenuToggle(page.id)}
+                          disabled={isUpdating}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600 disabled:opacity-50"></div>
+                      </label>
+                    </td>
+                  </tr>
                 )
               })}
             </tbody>

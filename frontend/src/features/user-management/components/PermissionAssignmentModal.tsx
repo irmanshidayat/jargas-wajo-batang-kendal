@@ -42,14 +42,32 @@ const PermissionAssignmentModal: React.FC<PermissionAssignmentModalProps> = ({
         userManagementApi.getUserPermissions(user.id),
       ])
 
-      setPages(Array.isArray(pagesResponse.data) ? pagesResponse.data : pagesResponse.data || [])
+      // Parse pages response
+      const pagesData = Array.isArray(pagesResponse.data) 
+        ? pagesResponse.data 
+        : (pagesResponse.data || [])
+      setPages(pagesData)
       
-      const allPerms = Array.isArray(permissionsResponse) 
-        ? permissionsResponse 
-        : (permissionsResponse as any)?.data || []
+      // Parse permissions response - handle both array and paginated response
+      let allPerms: Permission[] = []
+      if (Array.isArray(permissionsResponse)) {
+        allPerms = permissionsResponse
+      } else if (permissionsResponse && typeof permissionsResponse === 'object') {
+        allPerms = Array.isArray((permissionsResponse as any).data) 
+          ? (permissionsResponse as any).data 
+          : []
+      }
       setPermissions(allPerms)
       
-      const userPerms = Array.isArray(userPermsResponse) ? userPermsResponse : []
+      // Parse user permissions response
+      let userPerms: Permission[] = []
+      if (Array.isArray(userPermsResponse)) {
+        userPerms = userPermsResponse
+      } else if (userPermsResponse && typeof userPermsResponse === 'object') {
+        userPerms = Array.isArray((userPermsResponse as any).data) 
+          ? (userPermsResponse as any).data 
+          : []
+      }
       setUserPermissions(userPerms)
       setSelectedPermissionIds(userPerms.map((p) => p.id))
     } catch (error: any) {
