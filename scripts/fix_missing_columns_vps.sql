@@ -208,5 +208,22 @@ PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
-SELECT 'Script selesai! Semua kolom yang diperlukan sudah ditambahkan, termasuk created_by di users untuk fix error login.' AS result;
+-- 6. Tambahkan kolom harga ke materials (jika belum ada) - FIX UNTUK ERROR TAMBAH BARANG
+SET @col_exists = (
+    SELECT COUNT(*) 
+    FROM information_schema.COLUMNS 
+    WHERE TABLE_SCHEMA = 'jargas_apbn' 
+    AND TABLE_NAME = 'materials' 
+    AND COLUMN_NAME = 'harga'
+);
+
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE materials ADD COLUMN harga DECIMAL(15,2) NULL',
+    'SELECT ''Kolom harga sudah ada di materials'' AS message'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SELECT 'Script selesai! Semua kolom yang diperlukan sudah ditambahkan, termasuk created_by di users untuk fix error login dan harga di materials untuk fix error tambah barang.' AS result;
 
