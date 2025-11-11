@@ -69,7 +69,8 @@ class SuratJalanRepository(BaseRepository[SuratJalan]):
         skip: int = 0,
         limit: int = 100,
         filters: Optional[Dict[str, Any]] = None,
-        project_id: Optional[int] = None
+        project_id: Optional[int] = None,
+        user_id: Optional[int] = None
     ) -> List[SuratJalan]:
         """Get all surat jalan dengan sorting berdasarkan created_at DESC (terbaru dulu)"""
         try:
@@ -78,6 +79,11 @@ class SuratJalanRepository(BaseRepository[SuratJalan]):
             # Auto-filter by project_id if model has project_id column and project_id is provided
             if project_id is not None and hasattr(self.model, 'project_id'):
                 query = query.filter(self.model.project_id == project_id)
+            
+            # Auto-filter by user hierarchy if model has created_by column and user_id is provided
+            if user_id is not None and hasattr(self.model, 'created_by'):
+                from app.utils.user_hierarchy import filter_by_user_hierarchy
+                query = filter_by_user_hierarchy(query, self.db, user_id, self.model.created_by)
             
             if filters:
                 for key, value in filters.items():

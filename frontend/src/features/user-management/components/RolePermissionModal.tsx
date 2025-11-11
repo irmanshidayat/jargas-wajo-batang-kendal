@@ -31,8 +31,10 @@ const RolePermissionModal: React.FC<RolePermissionModalProps> = ({
   const [roleDetail, setRoleDetail] = useState<RoleDetail | null>(null)
 
   useEffect(() => {
-    loadData()
-  }, [role])
+    if (role?.id) {
+      loadData()
+    }
+  }, [role?.id])
 
   const loadData = async () => {
     try {
@@ -42,7 +44,8 @@ const RolePermissionModal: React.FC<RolePermissionModalProps> = ({
         userManagementApi.getRole(role.id, true),
       ])
 
-      const pagesData = Array.isArray(pagesResponse.data) ? pagesResponse.data : pagesResponse.data || []
+      // Extract pages data dari paginated response
+      const pagesData = pagesResponse.data || []
       setPages(pagesData)
 
       // Initialize CRUD permissions map dengan default false untuk semua pages
@@ -57,7 +60,7 @@ const RolePermissionModal: React.FC<RolePermissionModalProps> = ({
       })
 
       // Populate dari role permissions yang sudah ada
-      if ('permissions' in roleDetailResponse) {
+      if (roleDetailResponse && 'permissions' in roleDetailResponse) {
         setRoleDetail(roleDetailResponse as RoleDetail)
         const rolePerms = (roleDetailResponse as RoleDetail).permissions || []
         
@@ -85,11 +88,20 @@ const RolePermissionModal: React.FC<RolePermissionModalProps> = ({
 
       setPageCRUDPermissions(initialPermissions)
     } catch (error: any) {
-      Swal.fire({
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
+      console.error('Error loading permissions data:', error)
+      await Swal.fire({
         icon: 'error',
-        title: 'Error',
-        text: 'Gagal memuat data permissions',
+        title: 'Gagal Memuat Data',
+        text: error.response?.data?.detail || error.response?.data?.message || error.message || 'Gagal memuat data permissions. Silakan coba lagi.',
+        confirmButtonText: 'OK',
       })
+      // Tutup modal jika error saat load data
+      onClose()
     } finally {
       setLoadingData(false)
     }
@@ -125,10 +137,17 @@ const RolePermissionModal: React.FC<RolePermissionModalProps> = ({
       onSuccess()
       onClose()
     } catch (error: any) {
-      Swal.fire({
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
+      console.error('Error saving permissions:', error)
+      await Swal.fire({
         icon: 'error',
-        title: 'Error',
-        text: error.response?.data?.message || error.message || 'Gagal menyimpan permissions',
+        title: 'Gagal Menyimpan',
+        text: error.response?.data?.detail || error.response?.data?.message || error.message || 'Gagal menyimpan permissions. Silakan coba lagi.',
+        confirmButtonText: 'OK',
       })
     } finally {
       setLoading(false)

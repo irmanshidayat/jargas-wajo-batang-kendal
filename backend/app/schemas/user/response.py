@@ -22,6 +22,7 @@ class UserResponse(BaseModel):
     is_superuser: bool
     role_id: Optional[int] = None
     role: Optional[RoleBasicInfo] = None
+    created_by: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 
@@ -38,6 +39,7 @@ class UserListResponse(BaseModel):
     is_superuser: bool
     role_id: Optional[int] = None
     role: Optional[RoleBasicInfo] = None
+    created_by: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 

@@ -184,7 +184,8 @@ class SuratPermintaanService:
         search: Optional[str] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
-        project_id: Optional[int] = None
+        project_id: Optional[int] = None,
+        user_id: Optional[int] = None
     ) -> tuple[List, int]:
         """Get all surat permintaan dengan pagination"""
         try:
@@ -196,7 +197,7 @@ class SuratPermintaanService:
                 total = len(self.surat_permintaan_repo.get_by_date_range(start_date, end_date, 0, 10000, project_id))
             else:
                 filters = {"is_deleted": 0}
-                items = self.surat_permintaan_repo.get_all(skip=skip, limit=limit, filters=filters, project_id=project_id)
+                items = self.surat_permintaan_repo.get_all(skip=skip, limit=limit, filters=filters, project_id=project_id, user_id=user_id)
                 total = self.surat_permintaan_repo.count(filters=filters, project_id=project_id)
             
             return items, total

@@ -2706,7 +2706,8 @@ async def get_surat_permintaans(
             search=search,
             start_date=start_date,
             end_date=end_date,
-            project_id=project_id
+            project_id=project_id,
+            user_id=current_user.id
         )
         
         # Convert to response format
@@ -3264,7 +3265,8 @@ async def get_surat_jalans(
             search=search,
             start_date=start_date,
             end_date=end_date,
-            project_id=project_id
+            project_id=project_id,
+            user_id=current_user.id
         )
         
         # Convert to response format

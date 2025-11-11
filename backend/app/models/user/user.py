@@ -20,9 +20,11 @@ class User(BaseModel):
     role_id = Column(Integer, ForeignKey("roles.id"), nullable=True, index=True)
     is_active = Column(Boolean, default=True, nullable=False)
     is_superuser = Column(Boolean, default=False, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     
     # Relationships
     role_obj = relationship("Role", foreign_keys=[role_id], back_populates="users")
+    parent_user = relationship("User", remote_side="User.id", foreign_keys=[created_by], backref="child_users")
     user_permissions = relationship("UserPermission", back_populates="user", cascade="all, delete-orphan")
     user_projects = relationship("UserProject", back_populates="user", cascade="all, delete-orphan")
     menu_preferences = relationship("UserMenuPreference", back_populates="user", cascade="all, delete-orphan")

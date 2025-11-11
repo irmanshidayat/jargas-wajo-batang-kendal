@@ -97,7 +97,8 @@ async def create_user(
     check_superuser(current_user)
     
     user_service = UserService(db)
-    user = user_service.create(user_data)
+    # Pass current_user.id sebagai created_by
+    user = user_service.create(user_data, created_by_user_id=current_user.id)
     
     return success_response(
         data=user.model_dump(),

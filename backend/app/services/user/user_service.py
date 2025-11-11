@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.repositories.user.user_repository import UserRepository
 from app.repositories.user.role_repository import RoleRepository
+from app.repositories.project.user_project_repository import UserProjectRepository
 from app.schemas.user.request import (
     UserCreateRequest,
     UserUpdateRequest,
@@ -22,6 +23,7 @@ class UserService:
     def __init__(self, db: Session):
         self.repository = UserRepository(db)
         self.role_repo = RoleRepository(db)
+        self.user_project_repo = UserProjectRepository(db)
         self.db = db
 
     def get_all(
@@ -57,6 +59,7 @@ class UserService:
                     "name": user.role_obj.name,
                     "description": user.role_obj.description
                 } if user.role_obj else None,
+                "created_by": user.created_by,
                 "created_at": user.created_at,
                 "updated_at": user.updated_at,
             }
@@ -85,13 +88,14 @@ class UserService:
                 "name": user.role_obj.name,
                 "description": user.role_obj.description
             } if user.role_obj else None,
+            "created_by": user.created_by,
             "created_at": user.created_at,
             "updated_at": user.updated_at,
         }
         
         return UserResponse.model_validate(user_dict)
 
-    def create(self, user_data: UserCreateRequest) -> UserResponse:
+    def create(self, user_data: UserCreateRequest, created_by_user_id: int | None = None) -> UserResponse:
         """Create new user"""
         # Check if email already exists
         if self.repository.email_exists(user_data.email):
@@ -114,11 +118,44 @@ class UserService:
             "role_id": user_data.role_id,
             "is_active": user_data.is_active,
             "is_superuser": user_data.is_superuser,
+            "created_by": created_by_user_id,  # Set created_by dari user yang membuat
         }
         
         user = self.repository.create(user_dict)
         if not user:
             raise ValidationError("Gagal membuat user baru")
+        
+        # Copy project access dari parent user ke user baru
+        if created_by_user_id:
+            try:
+                # Ambil semua project yang dimiliki parent user (is_active = True)
+                parent_projects = self.user_project_repo.get_user_projects(created_by_user_id)
+                
+                # Copy project access ke user baru (dengan is_owner = False, hanya sebagai member)
+                for parent_project in parent_projects:
+                    # Check apakah user baru sudah punya akses ke project ini
+                    existing = self.user_project_repo.get_by_user_and_project(
+                        user.id, 
+                        parent_project.project_id
+                    )
+                    
+                    if not existing:
+                        # Buat UserProject baru untuk user baru
+                        user_project_dict = {
+                            "user_id": user.id,
+                            "project_id": parent_project.project_id,
+                            "is_active": True,
+                            "is_owner": False,  # User baru hanya sebagai member, bukan owner
+                        }
+                        self.user_project_repo.create(user_project_dict)
+            except Exception as e:
+                # Log error tapi jangan gagalkan proses create user
+                # Project access bisa di-assign manual nanti jika ada masalah
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    f"Gagal copy project access dari parent user {created_by_user_id} ke user baru {user.id}: {str(e)}",
+                    exc_info=True
+                )
         
         return self.get_by_id(user.id)
 
