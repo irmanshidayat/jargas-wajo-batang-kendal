@@ -1,0 +1,70 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Manual trigger
+
+env:
+  SERVER_IP: 72.61.142.109
+  SERVER_USER: root
+  PROJECT_PATH: ~/jargas-wajo-batang-kendal
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          ssh-keyscan -H ${{ env.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to Production Server
+        run: |
+          ssh ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} << 'EOF'
+            set -e
+            cd ${{ env.PROJECT_PATH }}
+            
+            echo "📥 Pulling latest code from main branch..."
+            git fetch origin
+            git reset --hard origin/main
+            
+            echo "🔨 Building Docker containers..."
+            docker-compose build --no-cache
+            
+            echo "🛑 Stopping containers..."
+            docker-compose down
+            
+            echo "🚀 Starting containers..."
+            docker-compose up -d
+            
+            echo "⏳ Waiting for services to be ready..."
+            sleep 30
+            
+            echo "✅ Deployment completed!"
+            echo "🌐 Frontend: https://jargas.ptkiansantang.com"
+            echo "🔗 Backend: https://jargas.ptkiansantang.com/api/v1/health"
+          EOF
+
+      - name: Health Check
+        run: |
+          sleep 10
+          curl -f https://jargas.ptkiansantang.com/api/v1/health || exit 1
+
+      - name: Deployment Summary
+        run: |
+          echo "## ✅ Production Deployment Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend**: https://jargas.ptkiansantang.com" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend**: https://jargas.ptkiansantang.com/api/v1/health" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployed at**: $(date)" >> $GITHUB_STEP_SUMMARY
+

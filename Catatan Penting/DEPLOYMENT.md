@@ -297,4 +297,170 @@ MIGRATION_MODE: sequential
 
 ---
 
-**Terakhir diupdate:** 2025-01-27 (ditambahkan: Setup SSL/HTTPS)
+## 🌿 Branch Strategy & Multi-Environment Deployment
+
+### Overview
+
+Project ini menggunakan 2 branch utama:
+- **`main`** → Production → `https://jargas.ptkiansantang.com/`
+- **`dev`** → Development → `https://devjargas.ptkiansantang.com/`
+
+### Struktur Folder di Server
+
+```
+~/jargas-wajo-batang-kendal/          # Production
+  ├── docker-compose.yml
+  └── ...
+
+~/jargas-wajo-batang-kendal-dev/      # Development
+  ├── docker-compose.dev.yml
+  └── ...
+```
+
+### Port Configuration
+
+**Production:**
+- Frontend: `8080`
+- Backend: `8001`
+- MySQL: `3308`
+- Adminer: `8081`
+
+**Development:**
+- Frontend: `8082`
+- Backend: `8002`
+- MySQL: `3309`
+- Adminer: `8083`
+
+### Database
+
+- **Production**: `jargas_apbn`
+- **Development**: `jargas_apbn_dev` (terpisah)
+
+### Deployment Production
+
+**Lokal:**
+```powershell
+git checkout main
+git add .
+git commit -m "Update production"
+git push origin main
+```
+
+**Server (Otomatis via GitHub Actions):**
+- Auto-deploy saat push ke `main`
+- Atau manual: `ssh root@72.61.142.109 'cd ~/jargas-wajo-batang-kendal && git pull origin main && docker-compose build --no-cache && docker-compose up -d'`
+
+**Script Manual:**
+```powershell
+# Dari Windows
+.\scripts\deploy-with-migration.ps1
+```
+
+### Deployment Development
+
+**Lokal:**
+```powershell
+git checkout dev
+git add .
+git commit -m "Update development"
+git push origin dev
+```
+
+**Server (Otomatis via GitHub Actions):**
+- Auto-deploy saat push ke `dev`
+- Atau manual: `ssh root@72.61.142.109 'cd ~/jargas-wajo-batang-kendal-dev && git pull origin dev && docker-compose -f docker-compose.dev.yml build --no-cache && docker-compose -f docker-compose.dev.yml up -d'`
+
+**Script Manual:**
+```powershell
+# Dari Windows
+.\scripts\deploy-dev.ps1
+```
+
+### Setup Awal Development Environment
+
+1. **Clone repository ke folder dev:**
+```bash
+ssh root@72.61.142.109
+cd ~
+git clone <repository-url> jargas-wajo-batang-kendal-dev
+cd jargas-wajo-batang-kendal-dev
+git checkout dev
+```
+
+2. **Setup domain:**
+```powershell
+# Dari Windows
+.\scripts\setup-dev-domain.ps1
+```
+
+3. **Setup SSL:**
+```bash
+# Di server
+sudo certbot --nginx -d devjargas.ptkiansantang.com
+```
+
+4. **Deploy pertama kali:**
+```powershell
+# Dari Windows
+.\scripts\deploy-dev.ps1
+```
+
+### GitHub Actions Setup
+
+1. **Buat SSH Key Pair:**
+```bash
+ssh-keygen -t ed25519 -C "github-actions" -f ~/.ssh/github_actions
+```
+
+2. **Copy public key ke server:**
+```bash
+ssh-copy-id -i ~/.ssh/github_actions.pub root@72.61.142.109
+```
+
+3. **Tambah SSH Private Key ke GitHub Secrets:**
+   - GitHub Repository → Settings → Secrets and variables → Actions
+   - New repository secret
+   - Name: `SSH_PRIVATE_KEY`
+   - Value: Isi dari `~/.ssh/github_actions` (private key)
+
+4. **Test Deployment:**
+   - Push ke branch `main` → Auto-deploy production
+   - Push ke branch `dev` → Auto-deploy development
+
+### Best Practices
+
+1. **Selalu test di dev sebelum merge ke main**
+2. **Gunakan commit message yang jelas**
+3. **Monitor deployment logs di GitHub Actions**
+4. **Backup database sebelum deploy production**
+5. **Gunakan feature branch untuk fitur besar**
+
+### Workflow Development
+
+```bash
+# 1. Buat feature branch dari dev
+git checkout dev
+git pull origin dev
+git checkout -b feature/nama-fitur
+
+# 2. Develop dan commit
+git add .
+git commit -m "feat: Tambah fitur baru"
+
+# 3. Push ke feature branch
+git push origin feature/nama-fitur
+
+# 4. Test di development server (setelah merge ke dev)
+git checkout dev
+git merge feature/nama-fitur
+git push origin dev  # Auto-deploy ke devjargas.ptkiansantang.com
+
+# 5. Setelah testing, merge ke main untuk production
+git checkout main
+git merge dev
+git push origin main  # Auto-deploy ke jargas.ptkiansantang.com
+```
+
+---
+
+**Terakhir diupdate:** 2025-01-27 (ditambahkan: Multi-Environment Deployment)
