@@ -1,0 +1,118 @@
+# Docker Compose untuk Development Environment
+# Deploy ke: devjargas.ptkiansantang.com
+# Folder: ~/jargas-wajo-batang-kendal-dev
+
+services:
+  # MySQL Database Service (Development)
+  mysql:
+    image: mysql:8.0
+    container_name: jargas_mysql_dev
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "admin123"
+      MYSQL_DATABASE: ${DB_NAME:-jargas_apbn_dev}
+      TZ: Asia/Jakarta
+    ports:
+      - "${DB_PORT_MAPPED:-3309}:3306"
+    volumes:
+      - mysql_data_dev:/var/lib/mysql
+    networks:
+      - jargas_network_dev
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-padmin123"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  # Backend API Service (Development)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: jargas_backend_dev
+    restart: unless-stopped
+    environment:
+      DOCKER_CONTAINER: "true"
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: "admin123"
+      DB_NAME: ${DB_NAME:-jargas_apbn_dev}
+      SECRET_KEY: ${SECRET_KEY}
+      DEBUG: ${DEBUG:-True}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://devjargas.ptkiansantang.com,http://localhost:8082}
+      AUTO_MIGRATE: ${AUTO_MIGRATE:-True}
+      AUTO_MIGRATE_ONLY_IF_PENDING: ${AUTO_MIGRATE_ONLY_IF_PENDING:-True}
+      TZ: Asia/Jakarta
+    ports:
+      - "${BACKEND_PORT_MAPPED:-8002}:8000"
+    volumes:
+      - backend_uploads_dev:/app/uploads/evidence
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - jargas_network_dev
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend Nginx Service (Development)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: jargas_frontend_dev
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: /api/v1
+      TZ: Asia/Jakarta
+    ports:
+      - "${FRONTEND_PORT_MAPPED:-8082}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - jargas_network_dev
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Adminer - Database Management Tool (Development)
+  adminer:
+    image: adminer:latest
+    container_name: jargas_adminer_dev
+    restart: unless-stopped
+    ports:
+      - "${ADMINER_PORT_MAPPED:-8083}:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - jargas_network_dev
+    environment:
+      TZ: Asia/Jakarta
+
+# Volumes untuk data persistence (Development)
+volumes:
+  mysql_data_dev:
+    driver: local
+    name: jargas_mysql_data_dev
+  backend_uploads_dev:
+    driver: local
+    name: jargas_backend_uploads_dev
+
+# Network untuk komunikasi antar services (Development)
+networks:
+  jargas_network_dev:
+    driver: bridge
+    name: jargas_network_dev
+

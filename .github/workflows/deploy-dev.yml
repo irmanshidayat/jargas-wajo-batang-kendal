@@ -1,0 +1,71 @@
+name: Deploy Development
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch: # Manual trigger
+
+env:
+  SERVER_IP: 72.61.142.109
+  SERVER_USER: root
+  PROJECT_PATH: ~/jargas-wajo-batang-kendal-dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          ssh-keyscan -H ${{ env.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to Development Server
+        run: |
+          ssh ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} << 'EOF'
+            set -e
+            cd ${{ env.PROJECT_PATH }}
+            
+            echo "📥 Pulling latest code from dev branch..."
+            git fetch origin
+            git checkout dev
+            git reset --hard origin/dev
+            
+            echo "🔨 Building Docker containers (development)..."
+            docker-compose -f docker-compose.dev.yml build --no-cache
+            
+            echo "🛑 Stopping containers..."
+            docker-compose -f docker-compose.dev.yml down
+            
+            echo "🚀 Starting containers..."
+            docker-compose -f docker-compose.dev.yml up -d
+            
+            echo "⏳ Waiting for services to be ready..."
+            sleep 30
+            
+            echo "✅ Deployment completed!"
+            echo "🌐 Frontend: https://devjargas.ptkiansantang.com"
+            echo "🔗 Backend: https://devjargas.ptkiansantang.com/api/v1/health"
+          EOF
+
+      - name: Health Check
+        run: |
+          sleep 10
+          curl -f https://devjargas.ptkiansantang.com/api/v1/health || exit 1
+
+      - name: Deployment Summary
+        run: |
+          echo "## ✅ Development Deployment Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend**: https://devjargas.ptkiansantang.com" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend**: https://devjargas.ptkiansantang.com/api/v1/health" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployed at**: $(date)" >> $GITHUB_STEP_SUMMARY
+
