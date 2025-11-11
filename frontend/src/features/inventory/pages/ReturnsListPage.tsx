@@ -129,6 +129,11 @@ export default function ReturnsListPage() {
       await Swal.fire({ icon: 'success', title: 'Berhasil', text: 'Return berhasil dikeluarkan kembali' })
       loadReturns()
     } catch (e: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED' || e?.message === 'canceled') {
+        return
+      }
+      
       Swal.fire({ icon: 'error', title: 'Error', text: e.response?.data?.detail || 'Gagal mengeluarkan kembali' })
     }
   }

@@ -348,6 +348,7 @@ class PermissionService:
                     "page_id": perm.page_id,
                     "page_name": perm.page.name if perm.page else None,
                     "page_path": perm.page.path if perm.page else None,
+                    "display_name": perm.page.display_name if perm.page else None,
                     "can_create": perm.can_create,
                     "can_read": perm.can_read,
                     "can_update": perm.can_update,

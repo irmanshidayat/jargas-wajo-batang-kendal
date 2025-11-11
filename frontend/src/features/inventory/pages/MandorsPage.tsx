@@ -32,6 +32,11 @@ export default function MandorsPage() {
       // extractPaginatedResponse mengembalikan: { data: [...], total, page, limit, message }
       setMandors(response.data || [])
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       Swal.fire({
         icon: 'error',
         title: 'Error',
@@ -106,6 +111,11 @@ export default function MandorsPage() {
       handleCloseModal()
       loadMandors(1, 100, searchTerm || undefined)
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       Swal.fire({
         icon: 'error',
         title: 'Error',

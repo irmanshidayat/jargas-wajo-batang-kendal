@@ -1,9 +1,23 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { useAppSelector } from '@/store/hooks'
 import { userManagementApi } from '@/features/user-management/services/userManagementApi'
 import { useState, useEffect } from 'react'
 import type { Page, UserMenuPreference } from '@/features/user-management/types'
 import { ROUTES } from '@/utils/constants'
+import { isSuperuser } from '@/utils/auth'
+
+// Flag global untuk mencegah fetch preferences jika ada network error
+let hasNetworkError = false
+let networkErrorResetTimeout: NodeJS.Timeout | null = null
+
+const resetNetworkErrorFlag = () => {
+  if (networkErrorResetTimeout) {
+    clearTimeout(networkErrorResetTimeout)
+  }
+  networkErrorResetTimeout = setTimeout(() => {
+    hasNetworkError = false
+  }, 10000) // Reset setelah 10 detik
+}
 
 interface MenuItem {
   label: string
@@ -47,25 +61,33 @@ const formatPageName = (pageName?: string, path?: string): string => {
  * Menu akan otomatis ter-update ketika permissions berubah
  */
 export const useMenuItems = () => {
-  const { user } = useAppSelector((state) => state.auth)
+  const { user, permissionsStatus } = useAppSelector((state) => state.auth)
   const [allPages, setAllPages] = useState<Page[]>([])
   const [loadingPages, setLoadingPages] = useState(false)
   const [userMenuPreferences, setUserMenuPreferences] = useState<Map<number, boolean>>(new Map())
   const [loadingPreferences, setLoadingPreferences] = useState(false)
+  
+  // Ref untuk mencegah multiple concurrent requests
+  const isFetchingPagesRef = useRef(false)
+  const isFetchingPreferencesRef = useRef(false)
+  const lastFetchedUserIdRef = useRef<number | null>(null)
+  const hasFetchedForSucceededRef = useRef(false) // Track apakah sudah fetch saat status succeeded
+  const lastPermissionsStatusRef = useRef<string>('idle') // Track status terakhir
 
   // Fetch semua pages untuk superuser agar bisa lihat semua menu
   useEffect(() => {
     const fetchPages = async () => {
       if (!user) return
       
-      const isSuperuser = user.is_superuser === true || 
-                          user.is_superuser === 1 || 
-                          user.is_superuser === '1' ||
-                          String(user.is_superuser).toLowerCase() === 'true'
+      // Mencegah multiple concurrent requests
+      if (isFetchingPagesRef.current) {
+        return
+      }
       
       // Hanya superuser yang bisa fetch pages (karena endpoint memerlukan superuser)
-      if (isSuperuser) {
+      if (isSuperuser(user)) {
         try {
+          isFetchingPagesRef.current = true
           setLoadingPages(true)
           // Backend membatasi limit maksimal 100, jadi kita fetch dengan pagination
           // Fetch semua pages dengan multiple requests jika perlu
@@ -96,22 +118,68 @@ export const useMenuItems = () => {
           setAllPages([])
         } finally {
           setLoadingPages(false)
+          isFetchingPagesRef.current = false
         }
       } else {
         // Non-superuser tidak perlu fetch, akan menggunakan info dari permissions
         setAllPages([])
+        isFetchingPagesRef.current = false
       }
     }
 
     fetchPages()
   }, [user?.id, user?.is_superuser]) // Re-fetch jika superuser status berubah
 
-  // Fetch user menu preferences
+  // Fetch user menu preferences - HANYA SEKALI saat permissions status pertama kali menjadi succeeded
+  // OPTIMASI: Hanya trigger saat permissionsStatus === 'succeeded' untuk mencegah redundant calls
   useEffect(() => {
+    // Early return guards - check sebelum memanggil async function
+    if (!user?.id) return
+    
+    // HANYA fetch jika permissions status SUCCEEDED
+    // Ini penting untuk mencegah fetch saat permissions belum siap atau sedang loading
+    if (permissionsStatus !== 'succeeded') {
+      return
+    }
+    
+    // Skip fetch jika ada network error sebelumnya (untuk mencegah infinite loop)
+    if (hasNetworkError) {
+      return
+    }
+    
+    // Mencegah multiple concurrent requests untuk user yang sama
+    if (isFetchingPreferencesRef.current && lastFetchedUserIdRef.current === user.id) {
+      return
+    }
+    
+    // Reset flag jika user.id berubah (user baru login atau switch user)
+    if (lastFetchedUserIdRef.current !== user.id) {
+      hasFetchedForSucceededRef.current = false
+      lastPermissionsStatusRef.current = 'idle'
+    }
+    
+    // Skip jika user id sama dengan yang sudah di-fetch DAN sudah pernah fetch untuk status succeeded
+    // Hanya fetch jika user id berbeda atau belum pernah fetch untuk status succeeded
+    if (lastFetchedUserIdRef.current === user.id && hasFetchedForSucceededRef.current) {
+      return
+    }
+    
+    // Skip jika user belum memiliki permissions (berarti belum siap)
+    // Ini penting untuk mencegah fetch saat user baru login dan permissions belum di-load
+    if (!user.permissions || !Array.isArray(user.permissions) || user.permissions.length === 0) {
+      // Untuk non-admin, tunggu sampai permissions di-load
+      // Untuk admin, bisa langsung fetch karena admin biasanya punya semua permissions
+      if (!isSuperuser(user)) {
+        return
+      }
+    }
+    
     const fetchPreferences = async () => {
-      if (!user?.id) return
-      
       try {
+        isFetchingPreferencesRef.current = true
+        lastFetchedUserIdRef.current = user.id
+        hasFetchedForSucceededRef.current = true
+        lastPermissionsStatusRef.current = permissionsStatus
         setLoadingPreferences(true)
         const preferences = await userManagementApi.getUserMenuPreferences(user.id)
         const preferencesMap = new Map<number, boolean>()
@@ -119,17 +187,44 @@ export const useMenuItems = () => {
           preferencesMap.set(pref.page_id, pref.show_in_menu)
         })
         setUserMenuPreferences(preferencesMap)
+        // Reset network error flag jika berhasil
+        hasNetworkError = false
       } catch (error: any) {
+        // Skip CanceledError - ini expected behavior saat cancel duplicate request
+        // Request di-cancel karena duplicate, tidak perlu handle sebagai error
+        if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+          // Request di-cancel karena duplicate, request baru yang sedang berjalan akan handle hasilnya
+          // Tidak perlu reset flag atau log error
+          return
+        }
+        
         console.error('Error fetching user menu preferences:', error)
+        // Jika error, reset flag agar bisa retry
+        hasFetchedForSucceededRef.current = false
         // Jika error, default ke empty map (semua menu akan ditampilkan)
+        const errorCode = error?.code || error?.message || ''
+        if (errorCode.includes('ERR_NETWORK') || 
+            errorCode.includes('ERR_INSUFFICIENT_RESOURCES') ||
+            errorCode.includes('Network Error')) {
+          // Set flag global untuk mencegah fetch berulang
+          hasNetworkError = true
+          resetNetworkErrorFlag()
+          // Reset lastFetchedUserIdRef agar bisa retry setelah timeout
+          lastFetchedUserIdRef.current = null
+        }
         setUserMenuPreferences(new Map())
       } finally {
+        // Cleanup hanya jika bukan CanceledError (karena CanceledError sudah return di catch)
         setLoadingPreferences(false)
+        isFetchingPreferencesRef.current = false
       }
     }
 
     fetchPreferences()
-  }, [user?.id])
+    // OPTIMASI: Hanya trigger saat user.id berubah atau permissionsStatus berubah
+    // Guard di dalam effect memastikan hanya fetch saat status === 'succeeded'
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, permissionsStatus])
 
   // Helper untuk deduplikasi khusus kasus Installed: buang '/list' jika base ada
   const dedupeInstalledMenu = (items: MenuItem[]): MenuItem[] => {
@@ -141,14 +236,9 @@ export const useMenuItems = () => {
   const menuItems = useMemo(() => {
     if (!user) return []
 
-    const isSuperuser = user.is_superuser === true || 
-                        user.is_superuser === 1 || 
-                        user.is_superuser === '1' ||
-                        String(user.is_superuser).toLowerCase() === 'true'
-
     // SUPERUSER/ADMIN: return semua pages yang ada di sistem (jika sudah di-fetch)
     // Atau gunakan permissions sebagai fallback jika pages belum ter-fetch
-    if (isSuperuser) {
+    if (isSuperuser(user)) {
       if (allPages.length > 0) {
         // Jika pages sudah di-fetch, gunakan itu
         // Filter berdasarkan user menu preferences
@@ -178,6 +268,7 @@ export const useMenuItems = () => {
             page_id: number
             page_name?: string
             page_path: string
+            display_name?: string
           }>()
 
           user.permissions.forEach((perm) => {
@@ -189,6 +280,7 @@ export const useMenuItems = () => {
                   page_id: perm.page_id,
                   page_name: perm.page_name,
                   page_path: path,
+                  display_name: perm.display_name,
                 })
               }
             }
@@ -197,7 +289,7 @@ export const useMenuItems = () => {
           const items: MenuItem[] = []
           permissionMap.forEach((permInfo) => {
             items.push({
-              label: formatPageName(permInfo.page_name, permInfo.page_path),
+              label: permInfo.display_name || formatPageName(permInfo.page_name, permInfo.page_path),
               path: permInfo.page_path,
               order: items.length + 100,
             })
@@ -220,6 +312,7 @@ export const useMenuItems = () => {
       page_id: number
       page_name?: string
       page_path: string
+      display_name?: string
     }>()
 
     user.permissions.forEach((perm) => {
@@ -234,6 +327,7 @@ export const useMenuItems = () => {
             page_id: perm.page_id,
             page_name: perm.page_name,
             page_path: path,
+            display_name: perm.display_name,
           })
         }
       }
@@ -258,8 +352,11 @@ export const useMenuItems = () => {
         }
       }
       
+      // Prioritas: display_name dari permission > display_name dari pageInfo > formatPageName
+      const label = permInfo.display_name || pageInfo?.display_name || formatPageName(permInfo.page_name, permInfo.page_path)
+      
       items.push({
-        label: pageInfo?.display_name || formatPageName(permInfo.page_name, permInfo.page_path),
+        label: label,
         path: permInfo.page_path,
         icon: pageInfo?.icon,
         // Gunakan order dari page jika ada, jika tidak gunakan order berdasarkan path

@@ -24,3 +24,20 @@ export const formatDecimal = (value: number | string | null | undefined): string
   }
   return numValue.toFixed(2)
 }
+
+/**
+ * Check if error is a canceled request error
+ * @param error Error object to check
+ * @returns true if error is a canceled request, false otherwise
+ */
+export const isCanceledError = (error: any): boolean => {
+  if (!error) return false
+  
+  return (
+    error.name === 'CanceledError' ||
+    error.message === 'canceled' ||
+    error.code === 'ERR_CANCELED' ||
+    (error.message && typeof error.message === 'string' && error.message.toLowerCase().includes('canceled')) ||
+    (error.config?.signal && error.config.signal.aborted)
+  )
+}

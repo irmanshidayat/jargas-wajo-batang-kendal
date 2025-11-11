@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { Outlet } from 'react-router-dom'
+import React, { useState, useEffect, useRef } from 'react'
+import { Navigate, Outlet } from 'react-router-dom'
 import { Header, Sidebar, Footer } from './index'
 import { useAppDispatch, useAppSelector } from '@/store/hooks'
 import { refreshUserPermissions } from '@/store/slices/authSlice'
@@ -7,19 +7,86 @@ import { refreshUserPermissions } from '@/store/slices/authSlice'
 const Layout: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const dispatch = useAppDispatch()
-  const { isAuthenticated, user } = useAppSelector((state) => state.auth)
+  const { isAuthenticated, user, permissionsStatus } = useAppSelector((state) => state.auth)
+  
+  // Redirect ke login jika belum authenticated
+  // Ini sebagai safety net, meskipun children sudah di-protect dengan PrivateRoute
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+  
+  // Ref untuk mencegah multiple refresh bersamaan
+  const lastRefreshedUserIdRef = useRef<number | null>(null)
+  const hasRefreshedRef = useRef(false)
 
-  // Auto-refresh permissions saat aplikasi dibuka (hanya sekali saat mount)
+  // Auto-refresh permissions HANYA SEKALI saat mount atau saat user.id berubah
+  // OPTIMASI: Jangan refresh lagi jika sudah succeeded untuk mencegah redundant calls
   useEffect(() => {
-    if (isAuthenticated && user) {
-      // Refresh permissions untuk memastikan menu sesuai dengan role terbaru
-      dispatch(refreshUserPermissions()).catch((error) => {
-        // Silent fail - tidak perlu notify user jika refresh gagal
-        console.warn('Auto-refresh permissions gagal:', error)
-      })
+    let isMounted = true
+
+    // Skip jika:
+    // - belum login atau tidak ada user
+    // - sedang loading (prevent concurrent calls)
+    // - sudah succeeded (tidak perlu refresh lagi)
+    // - sudah failed (prevent infinite retry - hanya retry manual)
+    if (
+      !isAuthenticated ||
+      !user ||
+      !user.id ||
+      permissionsStatus === 'loading' ||
+      permissionsStatus === 'succeeded' ||
+      (permissionsStatus === 'failed' && hasRefreshedRef.current)
+    ) {
+      return
     }
+
+    // Hanya refresh jika:
+    // - user.id berbeda dari yang terakhir di-refresh (user baru login atau switch user)
+    // - ATAU belum pernah refresh sama sekali (initial mount)
+    // - ATAU status idle (baru login, belum pernah refresh)
+    const shouldRefresh = 
+      lastRefreshedUserIdRef.current !== user.id ||
+      (!hasRefreshedRef.current && permissionsStatus === 'idle')
+
+    if (shouldRefresh) {
+      lastRefreshedUserIdRef.current = user.id
+      hasRefreshedRef.current = true
+
+      dispatch(refreshUserPermissions())
+        .then(() => {
+          if (isMounted) {
+            // Success - tidak perlu reset, biarkan tetap succeeded
+          }
+        })
+        .catch((error) => {
+          if (isMounted) {
+            console.warn('Auto-refresh permissions gagal:', error)
+            // Reset hanya jika network error dan setelah timeout
+            const errorCode = error?.code || error?.message || ''
+            if (
+              errorCode.includes('ERR_NETWORK') ||
+              errorCode.includes('ERR_INSUFFICIENT_RESOURCES') ||
+              errorCode.includes('Network Error')
+            ) {
+              // Reset setelah 30 detik untuk allow manual retry
+              setTimeout(() => {
+                if (isMounted) {
+                  lastRefreshedUserIdRef.current = null
+                  hasRefreshedRef.current = false
+                }
+              }, 30000)
+            }
+          }
+        })
+    }
+
+    return () => {
+      isMounted = false
+    }
+    // OPTIMASI: Hanya trigger saat user.id berubah, tidak trigger saat permissionsStatus berubah
+    // untuk mencegah redundant refresh calls
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Hanya sekali saat mount - dispatch dan state lainnya tidak perlu di-dependency
+  }, [isAuthenticated, user?.id])
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen)

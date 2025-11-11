@@ -1,15 +1,12 @@
 import React, { useState } from 'react'
 import { useAppDispatch } from '@/store/hooks'
 import { login } from '@/store/slices/authSlice'
-import { useNavigate } from 'react-router-dom'
 import Button from '@/components/common/Button'
 import Input from '@/components/common/Input'
 import Swal from 'sweetalert2'
 
 const LoginForm: React.FC = () => {
-  console.log('LoginForm component rendered')
   const dispatch = useAppDispatch()
-  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -36,8 +33,8 @@ const LoginForm: React.FC = () => {
         timer: 1500,
         showConfirmButton: false,
       })
-      // Redirect ke project selection setelah login
-      navigate('/select-project')
+      // Navigasi akan di-handle oleh PublicRoute setelah state isAuthenticated berubah
+      // Tidak perlu navigate manual untuk menghindari redundansi
     } catch (err: any) {
       await Swal.fire({
         icon: 'error',

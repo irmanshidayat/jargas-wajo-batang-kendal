@@ -39,6 +39,7 @@ class PermissionResponse(BaseModel):
     page_id: int
     page_name: Optional[str] = None
     page_path: Optional[str] = None
+    display_name: Optional[str] = None
     can_create: bool
     can_read: bool
     can_update: bool

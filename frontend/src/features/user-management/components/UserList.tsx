@@ -5,7 +5,6 @@ interface UserListProps {
   users: User[]
   loading: boolean
   onEdit: (user: User) => void
-  onAssignRole: (user: User) => void
   onAssignPermissions: (user: User) => void
   onDelete: (user: User) => void
 }
@@ -14,7 +13,6 @@ const UserList: React.FC<UserListProps> = ({
   users,
   loading,
   onEdit,
-  onAssignRole,
   onAssignPermissions,
   onDelete,
 }) => {
@@ -94,16 +92,9 @@ const UserList: React.FC<UserListProps> = ({
                     <button
                       onClick={() => onEdit(user)}
                       className="text-indigo-600 hover:text-indigo-900"
-                      title="Edit"
+                      title="Edit User (termasuk role)"
                     >
                       Edit
-                    </button>
-                    <button
-                      onClick={() => onAssignRole(user)}
-                      className="text-blue-600 hover:text-blue-900"
-                      title="Assign Role"
-                    >
-                      Role
                     </button>
                     <button
                       onClick={() => onAssignPermissions(user)}

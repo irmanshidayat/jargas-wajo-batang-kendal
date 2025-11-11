@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react'
 import { useAppDispatch, useAppSelector } from '@/store/hooks'
-import { useNavigate } from 'react-router-dom'
 import { fetchUserProjects, selectProject } from '@/store/slices/projectSlice'
 import ProjectCard from '../components/ProjectCard'
 import ProjectFormModal from '../components/ProjectFormModal'
@@ -10,19 +9,17 @@ import Swal from 'sweetalert2'
 
 const ProjectSelectPage: React.FC = () => {
   const dispatch = useAppDispatch()
-  const navigate = useNavigate()
   const { availableProjects, isLoading } = useAppSelector((state) => state.project)
   const { isAuthenticated } = useAppSelector((state) => state.auth)
   const [showCreateModal, setShowCreateModal] = useState(false)
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      navigate('/login')
-      return
+    // Navigasi akan di-handle oleh PublicRoute/PrivateRoute
+    // Tidak perlu check isAuthenticated dan navigate manual untuk menghindari redundansi
+    if (isAuthenticated) {
+      dispatch(fetchUserProjects())
     }
-
-    dispatch(fetchUserProjects())
-  }, [dispatch, isAuthenticated, navigate])
+  }, [dispatch, isAuthenticated])
 
   const handleSelectProject = async (project: Project) => {
     try {
@@ -34,7 +31,8 @@ const ProjectSelectPage: React.FC = () => {
         timer: 1500,
         showConfirmButton: false,
       })
-      navigate('/dashboard')
+      // Navigasi akan di-handle oleh PrivateRoute setelah currentProject berubah
+      // Tidak perlu navigate manual untuk menghindari redundansi
     } catch (error: any) {
       await Swal.fire({
         icon: 'error',

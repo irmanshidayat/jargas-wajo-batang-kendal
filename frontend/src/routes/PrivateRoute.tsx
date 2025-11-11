@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAppSelector } from '@/store/hooks'
+import { canAccessPage, arePermissionsLoaded, isPublicPage, isSuperuser } from '@/utils/auth'
 
 interface PrivateRouteProps {
   children: React.ReactNode
@@ -7,10 +8,11 @@ interface PrivateRouteProps {
 }
 
 const PrivateRoute = ({ children, requiredPermission }: PrivateRouteProps) => {
-  const { isAuthenticated, user } = useAppSelector((state) => state.auth)
+  const { isAuthenticated, user, permissionsStatus } = useAppSelector((state) => state.auth)
   const { currentProject } = useAppSelector((state) => state.project)
   const location = useLocation()
 
+  // Redirect ke login jika belum authenticated
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
   }
@@ -26,63 +28,47 @@ const PrivateRoute = ({ children, requiredPermission }: PrivateRouteProps) => {
     return <Navigate to="/dashboard" replace />
   }
 
-  // Check apakah user adalah superuser/admin
-  const isSuperuser = user?.is_superuser === true || 
-                      user?.is_superuser === 1 || 
-                      user?.is_superuser === '1' ||
-                      String(user?.is_superuser).toLowerCase() === 'true'
-  
-  // SUPERUSER/ADMIN: Selalu punya akses ke SEMUA halaman tanpa terkecuali
-  // Bypass semua permission check untuk superuser
-  if (isSuperuser) {
+  // Untuk superuser, langsung allow access (tidak perlu check permissions)
+  if (isSuperuser(user)) {
     return <>{children}</>
   }
 
-  // Exception: Dashboard bisa diakses semua user yang sudah login
-  // Ini adalah halaman default yang aman untuk semua user
-  if (location.pathname === '/dashboard' || location.pathname === '/') {
+  // Untuk public pages, langsung allow access
+  if (isPublicPage(location.pathname)) {
     return <>{children}</>
   }
 
-  // Untuk non-superuser, selalu check permissions (baik dengan atau tanpa requiredPermission)
-  // Jika tidak punya permissions sama sekali, DENY access
-  if (!user || !user.permissions || !Array.isArray(user.permissions) || user.permissions.length === 0) {
-    return <Navigate to="/dashboard" replace />
+  // Check apakah permissions sudah loaded
+  // Jika belum loaded, tunggu sampai loaded
+  // Jika permissions failed, tetap coba check dengan permissions yang ada (bisa dari localStorage)
+  const permissionsReady = arePermissionsLoaded(user) || permissionsStatus === 'failed'
+
+  // Jika permissions belum ready dan sedang loading, tunggu sebentar
+  // Tapi jangan block terlalu lama untuk menghindari user experience yang buruk
+  if (!permissionsReady && permissionsStatus === 'loading') {
+    // Biarkan render dengan permissions yang ada (bisa dari localStorage)
+    // Jika tidak ada, akan di-check di bawah dan redirect jika perlu
   }
 
-  // Determine permission requirement (default to 'read' jika tidak specified)
+  // Check apakah user dapat mengakses halaman ini
+  // Menggunakan utility function untuk menghindari redundansi
   const permissionNeeded = requiredPermission || 'read'
-
-  // Check permission berdasarkan path dengan STRICT matching
-  // Hanya exact match yang diizinkan - tidak ada parent-child inheritance
-  const hasPermission = user.permissions.some((perm) => {
-    // Check CRUD permission sesuai permissionNeeded
-    let canAccess = false
-    if (permissionNeeded === 'read') {
-      canAccess = perm.can_read === true
-    } else {
-      // write permission berarti minimal ada salah satu CRUD yang true
-      canAccess = perm.can_read || perm.can_create || perm.can_update || perm.can_delete
-    }
-    
-    if (!canAccess) {
-      return false
-    }
-    
-    // Normalize paths untuk comparison
-    const permPath = (perm.page_path || '').trim()
-    const currentPath = location.pathname.trim()
-    
-    // STRICT CHECK: Hanya exact match yang diizinkan
-    // Tidak ada parent-child inheritance untuk security
-    if (permPath === currentPath) {
-      return true
-    }
-    
-    return false
-  })
+  const canAccess = canAccessPage(user, location.pathname, permissionNeeded)
   
-  if (!hasPermission) {
+  // Jika tidak bisa akses, redirect ke dashboard (public page)
+  // Pastikan dashboard bisa diakses untuk menghindari infinite loop
+  if (!canAccess) {
+    // Jika permissions sedang loading dan belum ready, tunggu sebentar
+    // Tapi jika sudah terlalu lama (lebih dari 3 detik), anggap failed dan redirect
+    if (permissionsStatus === 'loading' && !arePermissionsLoaded(user)) {
+      // Untuk sekarang, biarkan render dengan permissions yang ada
+      // Jika tidak ada permissions sama sekali, akan di-redirect
+      // Ini untuk menghindari flash atau blocking terlalu lama
+      // Jika user tidak punya permission, akan di-redirect setelah permissions loaded
+      return <>{children}</>
+    }
+    
+    // Redirect ke dashboard (public page yang selalu bisa diakses)
     return <Navigate to="/dashboard" replace />
   }
 

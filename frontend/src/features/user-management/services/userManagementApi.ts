@@ -23,6 +23,9 @@ import type {
   PaginatedResponse,
 } from '../types'
 
+// In-flight memoization untuk mencegah duplicate requests menunggu promise yang sama
+const inFlightMenuPrefs = new Map<number, Promise<UserMenuPreference[]>>()
+
 export const userManagementApi = {
   // Roles
   getRoles: async (page: number = 1, limit: number = 100): Promise<PaginatedResponse<Role>> => {
@@ -160,10 +163,26 @@ export const userManagementApi = {
 
   // User Menu Preferences
   getUserMenuPreferences: async (userId: number): Promise<UserMenuPreference[]> => {
-    const response = await apiClient.get(
-      API_ENDPOINTS.PERMISSIONS.USER_MENU_PREFERENCES.GET_ALL(userId)
-    )
-    return extractData<UserMenuPreference[]>(response)
+    // Jika sudah ada request in-flight untuk userId ini, kembalikan promise yang sama
+    const existing = inFlightMenuPrefs.get(userId)
+    if (existing) {
+      return existing
+    }
+
+    const requestPromise = (async () => {
+      try {
+        const response = await apiClient.get(
+          API_ENDPOINTS.PERMISSIONS.USER_MENU_PREFERENCES.GET_ALL(userId)
+        )
+        return extractData<UserMenuPreference[]>(response)
+      } finally {
+        // Hapus dari map setelah selesai agar request berikutnya bisa dibuat lagi bila perlu
+        inFlightMenuPrefs.delete(userId)
+      }
+    })()
+
+    inFlightMenuPrefs.set(userId, requestPromise)
+    return requestPromise
   },
 
   getUserMenuPreference: async (userId: number, pageId: number): Promise<UserMenuPreference> => {

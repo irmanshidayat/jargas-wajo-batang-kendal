@@ -31,6 +31,11 @@ const RolesManagementPage: React.FC = () => {
       setRoles(response.data || [])
       setTotal(response.total || 0)
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       Swal.fire({
         icon: 'error',
         title: 'Error',
@@ -96,6 +101,11 @@ const RolesManagementPage: React.FC = () => {
         })
         loadRoles()
       } catch (error: any) {
+        // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+        if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+          return
+        }
+        
         Swal.fire({
           icon: 'error',
           title: 'Error',

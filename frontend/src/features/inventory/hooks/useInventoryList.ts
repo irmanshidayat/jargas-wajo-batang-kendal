@@ -77,6 +77,11 @@ export function useInventoryList<T>({
           response?.meta?.pagination?.total || response?.total || items.length
         setTotal(responseTotal)
       } catch (error: any) {
+        // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+        if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+          return
+        }
+        
         Swal.fire({
           icon: 'error',
           title: 'Error',

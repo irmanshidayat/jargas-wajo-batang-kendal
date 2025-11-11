@@ -2,6 +2,33 @@ import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'ax
 import { API_BASE_URL } from '@/utils/constants'
 import Swal from 'sweetalert2'
 
+// Flag untuk mencegah spam SweetAlert pada network error
+let networkErrorShown = false
+let networkErrorTimeout: NodeJS.Timeout | null = null
+let lastNetworkErrorTime = 0
+const NETWORK_ERROR_COOLDOWN = 10000 // 10 detik cooldown antara network error alerts
+
+// Reset flag setelah cooldown period
+const resetNetworkErrorFlag = () => {
+  if (networkErrorTimeout) {
+    clearTimeout(networkErrorTimeout)
+  }
+  networkErrorTimeout = setTimeout(() => {
+    networkErrorShown = false
+    lastNetworkErrorTime = 0
+  }, NETWORK_ERROR_COOLDOWN)
+}
+
+// Track pending requests untuk prevent duplicate calls dengan AbortController
+// Map untuk menyimpan AbortController untuk setiap request key
+const pendingRequests = new Map<string, AbortController>()
+const REQUEST_DEDUP_WINDOW = 2000 // 2 detik window untuk deduplication
+
+// Generate request key untuk deduplication
+const getRequestKey = (config: InternalAxiosRequestConfig): string => {
+  return `${config.method?.toUpperCase() || 'GET'}:${config.url || ''}`
+}
+
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -31,6 +58,33 @@ apiClient.interceptors.request.use(
       }
     }
     
+    // Track request dengan AbortController untuk cancel duplicate requests
+    // Hanya untuk GET requests (POST/PUT/DELETE mungkin punya payload berbeda)
+    if (config.method?.toUpperCase() === 'GET') {
+      const requestKey = getRequestKey(config)
+      const existingController = pendingRequests.get(requestKey)
+      
+      // Jika ada request yang sama sedang pending, cancel yang lama
+      if (existingController) {
+        console.debug(`[Client] Duplicate request detected: ${requestKey}, cancelling previous request...`)
+        existingController.abort()
+        pendingRequests.delete(requestKey)
+      }
+      
+      // Buat AbortController baru untuk request ini
+      const abortController = new AbortController()
+      config.signal = abortController.signal
+      pendingRequests.set(requestKey, abortController)
+      
+      // Clean up setelah timeout
+      setTimeout(() => {
+        const controller = pendingRequests.get(requestKey)
+        if (controller === abortController) {
+          pendingRequests.delete(requestKey)
+        }
+      }, REQUEST_DEDUP_WINDOW)
+    }
+    
     return config
   },
   (error: AxiosError) => {
@@ -40,8 +94,42 @@ apiClient.interceptors.request.use(
 
 // Response interceptor
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Clean up pending request setelah response berhasil
+    if (response.config) {
+      const requestKey = getRequestKey(response.config)
+      const controller = pendingRequests.get(requestKey)
+      // Hanya delete jika controller masih sama (tidak di-cancel)
+      if (controller && controller.signal === response.config.signal) {
+        pendingRequests.delete(requestKey)
+      }
+    }
+    return response
+  },
   async (error: AxiosError) => {
+    // Clean up pending request setelah error
+    // Skip jika error karena abort (request di-cancel)
+    // Periksa semua kemungkinan indikator canceled error
+    const isCanceledError = 
+      error.name === 'CanceledError' || 
+      error.message === 'canceled' ||
+      error.code === 'ERR_CANCELED' ||
+      (error.message && error.message.toLowerCase().includes('canceled')) ||
+      (error.config?.signal && error.config.signal.aborted)
+    
+    if (isCanceledError) {
+      // Jangan tampilkan error untuk canceled request
+      return Promise.reject(error)
+    }
+    
+    if (error.config) {
+      const requestKey = getRequestKey(error.config)
+      const controller = pendingRequests.get(requestKey)
+      // Hanya delete jika controller masih sama (tidak di-cancel)
+      if (controller && controller.signal === error.config.signal) {
+        pendingRequests.delete(requestKey)
+      }
+    }
     if (error.response) {
       const status = error.response.status
       const responseData = error.response.data as any
@@ -123,10 +211,25 @@ apiClient.interceptors.response.use(
         })
       }
     } else if (error.request) {
+      // Periksa dulu apakah ini canceled error sebelum menangani sebagai connection error
+      const isCanceledError = 
+        error.name === 'CanceledError' || 
+        error.message === 'canceled' ||
+        error.code === 'ERR_CANCELED' ||
+        (error.message && error.message.toLowerCase().includes('canceled')) ||
+        (error.config?.signal && error.config.signal.aborted)
+      
+      if (isCanceledError) {
+        // Jangan tampilkan error untuk canceled request
+        return Promise.reject(error)
+      }
+      
       // Request dibuat tapi tidak ada response (connection error)
       const isConnectionRefused = error.code === 'ECONNREFUSED' || 
                                    error.message?.includes('ECONNREFUSED') ||
-                                   error.message?.includes('Network Error')
+                                   error.message?.includes('Network Error') ||
+                                   error.code === 'ERR_NETWORK' ||
+                                   error.code === 'ERR_INSUFFICIENT_RESOURCES'
       
       const errorMessage = isConnectionRefused
         ? 'Backend server tidak berjalan atau tidak dapat diakses. Pastikan backend server sudah berjalan di port 8000 atau 8001.'
@@ -140,25 +243,53 @@ apiClient.interceptors.response.use(
       console.error('Full Error:', error)
       console.groupEnd()
 
-      await Swal.fire({
-        icon: 'error',
-        title: 'Tidak Ada Koneksi',
-        html: `
-          <div style="text-align: left;">
-            <p>${errorMessage}</p>
-            <p style="margin-top: 10px; font-size: 12px; color: #666;">
-              <strong>Tips:</strong><br/>
-              • Jika menggunakan Docker: jalankan <code>docker-compose up -d backend</code><br/>
-              • Jika tidak menggunakan Docker: jalankan <code>python run.py</code> di folder backend<br/>
-              • Pastikan backend berjalan di port 8000 atau 8001
-            </p>
-          </div>
-        `,
-        confirmButtonText: 'OK',
-        width: '600px'
-      })
+      // Hanya tampilkan SweetAlert sekali untuk mencegah spam
+      // Kecuali untuk endpoint penting seperti auth/profile (tapi dengan cooldown)
+      const isImportantEndpoint = error.config?.url?.includes('/auth/profile') || 
+                                   error.config?.url?.includes('/auth/login')
+      
+      const now = Date.now()
+      const timeSinceLastError = now - lastNetworkErrorTime
+      const shouldShowAlert = !networkErrorShown || 
+                              (isImportantEndpoint && timeSinceLastError > NETWORK_ERROR_COOLDOWN)
+      
+      if (shouldShowAlert) {
+        networkErrorShown = true
+        lastNetworkErrorTime = now
+        resetNetworkErrorFlag()
+        
+        await Swal.fire({
+          icon: 'error',
+          title: 'Tidak Ada Koneksi',
+          html: `
+            <div style="text-align: left;">
+              <p>${errorMessage}</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #666;">
+                <strong>Tips:</strong><br/>
+                • Jika menggunakan Docker: jalankan <code>docker-compose up -d backend</code><br/>
+                • Jika tidak menggunakan Docker: jalankan <code>python run.py</code> di folder backend<br/>
+                • Pastikan backend berjalan di port 8000 atau 8001<br/>
+                • Periksa apakah backend server sudah berjalan
+              </p>
+            </div>
+          `,
+          confirmButtonText: 'OK',
+          width: '600px'
+        })
+      }
     } else {
-      // Error lainnya
+      // Error lainnya - pastikan bukan canceled error
+      const isCanceledError = 
+        error.name === 'CanceledError' || 
+        error.message === 'canceled' ||
+        error.code === 'ERR_CANCELED' ||
+        (error.message && error.message.toLowerCase().includes('canceled'))
+      
+      if (isCanceledError) {
+        // Jangan tampilkan error untuk canceled request
+        return Promise.reject(error)
+      }
+      
       console.group('❓ Unknown Error')
       console.error('Error:', error)
       console.error('Message:', error.message)

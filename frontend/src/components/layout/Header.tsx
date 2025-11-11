@@ -4,6 +4,7 @@ import { logout, refreshUserPermissions } from '@/store/slices/authSlice'
 import { clearProject } from '@/store/slices/projectSlice'
 import { useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
+import { isSuperuser } from '@/utils/auth'
 
 interface HeaderProps {
   onToggleSidebar: () => void
@@ -35,6 +36,11 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
         showConfirmButton: false,
       })
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       await Swal.fire({
         icon: 'error',
         title: 'Error',
@@ -145,7 +151,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
                 <div className="hidden md:block">
                   <p className="text-sm font-medium text-slate-900">{user.name}</p>
                   <p className="text-xs text-slate-500">
-                    {user.is_superuser ? 'Superuser' : (user.role?.name || 'User')}
+                    {isSuperuser(user) ? 'Superuser' : (user.role?.name || 'User')}
                   </p>
                 </div>
               </div>

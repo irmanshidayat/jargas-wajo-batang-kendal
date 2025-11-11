@@ -38,6 +38,11 @@ const PermissionsManagementPage: React.FC = () => {
         : (permissionsResponse as any)?.data || []
       setPermissions(allPerms)
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       Swal.fire({
         icon: 'error',
         title: 'Error',
@@ -96,6 +101,11 @@ const PermissionsManagementPage: React.FC = () => {
         })
         loadData()
       } catch (error: any) {
+        // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+        if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+          return
+        }
+        
         Swal.fire({
           icon: 'error',
           title: 'Error',
@@ -131,6 +141,11 @@ const PermissionsManagementPage: React.FC = () => {
         })
         loadData()
       } catch (error: any) {
+        // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+        if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+          return
+        }
+        
         Swal.fire({
           icon: 'error',
           title: 'Error',

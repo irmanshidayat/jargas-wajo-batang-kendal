@@ -8,6 +8,7 @@ export interface Permission {
   page_id: number
   page_name?: string
   page_path?: string
+  display_name?: string
   can_create: boolean
   can_read: boolean
   can_update: boolean

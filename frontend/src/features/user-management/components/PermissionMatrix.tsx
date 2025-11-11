@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Page, Permission } from '../types'
 import { userManagementApi } from '../services/userManagementApi'
 import Swal from 'sweetalert2'
@@ -25,15 +25,33 @@ const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
   )
   const [userMenuPreferences, setUserMenuPreferences] = useState<Map<number, boolean>>(new Map())
   const [updatingPages, setUpdatingPages] = useState<Set<number>>(new Set())
+  
+  // Ref untuk mencegah duplicate calls
+  const isFetchingPreferencesRef = useRef(false)
+  const lastFetchedUserIdRef = useRef<number | null>(null)
 
   useEffect(() => {
     setLocalSelectedIds(new Set(selectedPermissionIds))
   }, [selectedPermissionIds])
 
-  // Fetch user menu preferences
+  // Fetch user menu preferences - dengan guard untuk prevent duplicate calls
   useEffect(() => {
     const fetchPreferences = async () => {
+      if (!userId) return
+      
+      // Skip jika sedang fetching untuk user yang sama
+      if (isFetchingPreferencesRef.current && lastFetchedUserIdRef.current === userId) {
+        return
+      }
+      
+      // Skip jika sudah pernah fetch untuk user ini
+      if (lastFetchedUserIdRef.current === userId) {
+        return
+      }
+      
       try {
+        isFetchingPreferencesRef.current = true
+        lastFetchedUserIdRef.current = userId
         const preferences = await userManagementApi.getUserMenuPreferences(userId)
         const preferencesMap = new Map<number, boolean>()
         preferences.forEach(pref => {
@@ -42,9 +60,19 @@ const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
         setUserMenuPreferences(preferencesMap)
       } catch (error: any) {
         console.error('Error fetching user menu preferences:', error)
+        // Reset ref agar bisa retry
+        lastFetchedUserIdRef.current = null
         // Default ke empty map (semua menu akan ditampilkan)
         setUserMenuPreferences(new Map())
+      } finally {
+        isFetchingPreferencesRef.current = false
       }
+    }
+
+    // Reset ref jika userId berubah
+    if (lastFetchedUserIdRef.current !== userId) {
+      lastFetchedUserIdRef.current = null
+      isFetchingPreferencesRef.current = false
     }
 
     if (userId) {

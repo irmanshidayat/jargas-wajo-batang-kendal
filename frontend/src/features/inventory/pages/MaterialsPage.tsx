@@ -55,6 +55,11 @@ export default function MaterialsPage() {
           : (response?.data?.items || response?.data || response?.items || [])
       setMaterials(items as Material[])
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       Swal.fire({
         icon: 'error',
         title: 'Error',
@@ -160,6 +165,11 @@ export default function MaterialsPage() {
         console.error('Error reloading unique values:', error)
       }
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       Swal.fire({
         icon: 'error',
         title: 'Error',
@@ -321,6 +331,11 @@ export default function MaterialsPage() {
         loadMaterials(1, 100, searchTerm || undefined)
       }
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       Swal.fire({
         icon: 'error',
         title: 'Error',
@@ -362,6 +377,11 @@ export default function MaterialsPage() {
         })
         loadMaterials(1, 100, searchTerm || undefined)
       } catch (error: any) {
+        // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+        if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+          return
+        }
+        
         Swal.fire({
           icon: 'error',
           title: 'Error',
@@ -654,6 +674,11 @@ export default function MaterialsPage() {
                           timer: 2000,
                         })
                       } catch (error: any) {
+                        // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+                        if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+                          return
+                        }
+                        
                         Swal.fire({
                           icon: 'error',
                           title: 'Error',
