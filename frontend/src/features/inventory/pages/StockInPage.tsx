@@ -35,17 +35,22 @@ export default function StockInPage() {
   const loadMaterials = async () => {
     try {
       const response = await inventoryService.getMaterials(1, 1000)
-      const items = Array.isArray(response?.data)
-        ? response.data
+      const items = Array.isArray((response as any)?.data)
+        ? (response as any).data
         : Array.isArray(response)
           ? response
-          : (response?.data?.items || response?.data || response?.items || [])
+          : ((response as any)?.data?.items || (response as any)?.data || (response as any)?.items || [])
       setMaterials(items as Material[])
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: 'Gagal memuat data materials',
+        text: error.response?.data?.detail || error.response?.data?.message || 'Gagal memuat data materials',
       })
     }
   }
@@ -139,10 +144,15 @@ export default function StockInPage() {
       setSuratJalanFiles([])
       setMaterialDatangFiles([])
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: error.response?.data?.detail || 'Gagal mencatat barang masuk',
+        text: error.response?.data?.detail || error.response?.data?.message || 'Gagal mencatat barang masuk',
       })
     } finally {
       setLoading(false)

@@ -118,11 +118,16 @@ export default function InstalledPage() {
       const items = extractItems<StockOut>(response)
       setStockOuts(items)
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       if (Swal.isVisible()) Swal.close()
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: error?.response?.data?.detail || 'Gagal memuat data barang keluar',
+        text: error.response?.data?.detail || error.response?.data?.message || 'Gagal memuat data barang keluar',
       })
       setStockOuts([])
     } finally {
@@ -136,10 +141,15 @@ export default function InstalledPage() {
       const response = await inventoryService.getMaterials(1, 1000)
       setMaterials(extractItems<Material>(response))
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: 'Gagal memuat data materials',
+        text: error.response?.data?.detail || error.response?.data?.message || 'Gagal memuat data materials',
       })
     }
   }
@@ -149,10 +159,15 @@ export default function InstalledPage() {
       const response = await inventoryService.getMandors(1, 1000)
       setMandors(extractItems<Mandor>(response))
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: 'Gagal memuat data mandors',
+        text: error.response?.data?.detail || error.response?.data?.message || 'Gagal memuat data mandors',
       })
     }
   }
@@ -258,6 +273,11 @@ export default function InstalledPage() {
           )
           successCount++
         } catch (error: any) {
+          // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+          if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+            return
+          }
+          
           errorCount++
           console.error(`Error creating installed for item ${i + 1}:`, error)
         }

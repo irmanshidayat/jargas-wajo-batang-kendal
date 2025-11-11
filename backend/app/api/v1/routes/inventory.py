@@ -723,7 +723,7 @@ async def get_stock_in_list(
 async def create_stock_in(
     nomor_invoice: str = Form(...),
     material_id: int = Form(...),
-    quantity: int = Form(..., gt=0),
+    quantity: float = Form(..., gt=0),
     tanggal_masuk: date = Form(...),
     evidence: List[UploadFile] = File(default=[]),
     surat_jalan: List[UploadFile] = File(default=[]),
@@ -1476,7 +1476,7 @@ async def get_stock_outs_by_nomor(
 async def create_stock_out(
     mandor_id: int = Form(...),
     material_id: int = Form(...),
-    quantity: int = Form(..., gt=0),
+    quantity: float = Form(..., gt=0),
     tanggal_keluar: date = Form(...),
     evidence: List[UploadFile] = File(default=[]),
     surat_permohonan: List[UploadFile] = File(default=[]),
@@ -1884,7 +1884,7 @@ async def get_installed_list(
 )
 async def create_installed(
     material_id: int = Form(...),
-    quantity: int = Form(..., gt=0),
+    quantity: float = Form(..., gt=0),
     tanggal_pasang: date = Form(...),
     mandor_id: int = Form(...),
     stock_out_id: Optional[int] = Form(None),
@@ -1964,9 +1964,9 @@ async def create_installed(
 async def create_return(
     mandor_id: int = Form(...),
     material_id: int = Form(...),
-    quantity_kembali: int = Form(..., gt=0),
-    quantity_kondisi_baik: Optional[int] = Form(None),
-    quantity_kondisi_reject: Optional[int] = Form(None),
+    quantity_kembali: float = Form(..., gt=0),
+    quantity_kondisi_baik: Optional[float] = Form(None),
+    quantity_kondisi_reject: Optional[float] = Form(None),
     nomor_barang_keluar: Optional[str] = Form(None),  # Nomor barang keluar (string)
     stock_out_id: Optional[int] = Form(None),  # Atau bisa pakai stock_out_id langsung
     tanggal_kembali: date = Form(...),

@@ -46,17 +46,22 @@ export default function StockOutPage() {
   const loadMaterials = async () => {
     try {
       const response = await inventoryService.getMaterials(1, 1000)
-      const items = Array.isArray(response?.data)
-        ? response.data
+      const items = Array.isArray((response as any)?.data)
+        ? (response as any).data
         : Array.isArray(response)
           ? response
-          : (response?.data?.items || response?.data || response?.items || [])
+          : ((response as any)?.data?.items || (response as any)?.data || (response as any)?.items || [])
       setMaterials(items as Material[])
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: 'Gagal memuat data materials',
+        text: error.response?.data?.detail || error.response?.data?.message || 'Gagal memuat data materials',
       })
     }
   }
@@ -66,10 +71,15 @@ export default function StockOutPage() {
       const response = await inventoryService.getMandors(1, 1000)
       setMandors(response.data || response.items || [])
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: 'Gagal memuat data mandors',
+        text: error.response?.data?.detail || error.response?.data?.message || 'Gagal memuat data mandors',
       })
     }
   }
@@ -80,10 +90,15 @@ export default function StockOutPage() {
       const items = extractItems<SuratPermintaan>(response)
       setSuratPermintaans(items)
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: 'Gagal memuat data surat permintaan',
+        text: error.response?.data?.detail || error.response?.data?.message || 'Gagal memuat data surat permintaan',
       })
     }
   }
@@ -122,6 +137,11 @@ export default function StockOutPage() {
         setSelectedNomorSurat('')
       }
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       Swal.fire({
         icon: 'error',
         title: 'Error',
@@ -191,6 +211,10 @@ export default function StockOutPage() {
             newStocks[materialId] = stockNow
           }
         } catch (error: any) {
+          // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+          if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+            return
+          }
           console.error(`Failed to fetch stock for material ${materialId}:`, error)
         }
       }
@@ -297,6 +321,11 @@ export default function StockOutPage() {
       setSuratSerahTerimaFiles([])
       setSelectedNomorSurat('')
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       Swal.fire({
         icon: 'error',
         title: 'Error',

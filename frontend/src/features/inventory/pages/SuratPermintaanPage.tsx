@@ -93,10 +93,15 @@ export default function SuratPermintaanPage() {
           : ((response as any)?.data?.items || (response as any)?.data || (response as any)?.items || [])
       setMaterials(items as Material[])
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: 'Gagal memuat data materials',
+        text: error.response?.data?.detail || error.response?.data?.message || 'Gagal memuat data materials',
       })
     }
   }
@@ -137,6 +142,10 @@ export default function SuratPermintaanPage() {
             newStocks[materialId] = stockNow
           }
         } catch (error: any) {
+          // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+          if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+            return
+          }
           console.error(`Failed to fetch stock for material ${materialId}:`, error)
         }
       }
@@ -311,10 +320,15 @@ export default function SuratPermintaanPage() {
         showConfirmButton: false
       })
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       Swal.fire({
         icon: 'error',
         title: 'Gagal',
-        text: error.message || 'Gagal generate PDF'
+        text: error.response?.data?.detail || error.response?.data?.message || error.message || 'Gagal generate PDF'
       })
     }
   }
@@ -337,10 +351,15 @@ export default function SuratPermintaanPage() {
 
       await printSuratPermintaanPDF(pdfData)
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       Swal.fire({
         icon: 'error',
         title: 'Gagal',
-        text: error.message || 'Gagal print PDF'
+        text: error.response?.data?.detail || error.response?.data?.message || error.message || 'Gagal print PDF'
       })
     }
   }
@@ -458,11 +477,16 @@ export default function SuratPermintaanPage() {
         mengetahuiAdminGudang: ''
       })
     } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
       console.error('Error submitting surat permintaan:', error)
       await Swal.fire({
         icon: 'error',
         title: 'Gagal',
-        text: error?.response?.data?.message || error?.message || 'Gagal menyimpan surat permintaan'
+        text: error.response?.data?.detail || error.response?.data?.message || error.message || 'Gagal menyimpan surat permintaan'
       })
     } finally {
       setIsSubmitting(false)
