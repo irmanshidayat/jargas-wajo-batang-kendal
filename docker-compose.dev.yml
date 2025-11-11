@@ -94,7 +94,7 @@ services:
     container_name: jargas_adminer_dev
     restart: unless-stopped
     ports:
-      - "${ADMINER_PORT_MAPPED:-8083}:8080"
+      - "${ADMINER_PORT_MAPPED:-18083}:8080"
     depends_on:
       mysql:
         condition: service_healthy
