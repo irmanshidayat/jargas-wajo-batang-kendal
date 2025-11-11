@@ -528,19 +528,34 @@ Certbot akan:
 
 #### 4. Setup Environment Variables
 
+**PENTING:** Docker Compose memerlukan file `.env` di root project untuk variable substitution!
+
 ```bash
-# Di server, copy file .env.example
+# Di server, setup .env untuk backend aplikasi
 cd ~/jargas-wajo-batang-kendal-dev
 cp backend/env.example backend/.env
 
-# Edit .env sesuai kebutuhan (gunakan nano atau vi)
+# Edit backend/.env sesuai kebutuhan (gunakan nano atau vi)
 nano backend/.env
+
+# Setup .env di root project untuk docker-compose variable substitution
+# Minimal perlu SECRET_KEY untuk menghindari warning
+echo "SECRET_KEY=n5TYLOYW-KO3hQfcNMBltRrPIwJS-lBQsMtDKFCFfJ4" > .env
+echo "DB_NAME=jargas_apbn_dev" >> .env
+echo "DEBUG=True" >> .env
+echo "CORS_ORIGINS=https://devjargas.ptkiansantang.com,http://localhost:8082" >> .env
 ```
 
 **Konfigurasi penting untuk development:**
+- `SECRET_KEY` - Wajib ada di root `.env` untuk docker-compose
 - `DB_NAME=jargas_apbn_dev`
 - `DEBUG=True`
 - `CORS_ORIGINS=https://devjargas.ptkiansantang.com,http://localhost:8082`
+
+**Catatan:**
+- File `backend/.env` digunakan oleh aplikasi backend Python
+- File `.env` di root digunakan oleh docker-compose untuk variable substitution
+- Keduanya perlu disetup dengan benar
 
 #### 5. Deploy Pertama Kali
 
