@@ -1,5 +1,6 @@
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from app.repositories.user.permission_repository import PageRepository, PermissionRepository
 from app.schemas.user.permission_request import (
     PageCreateRequest,
@@ -242,27 +243,65 @@ class PermissionService:
         if not user:
             raise NotFoundError(f"User dengan ID {user_id} tidak ditemukan")
         
-        # Delete existing user permissions
-        existing_ups = self.db.query(UserPermission).filter(UserPermission.user_id == user_id).all()
-        for up in existing_ups:
-            self.db.delete(up)
+        # Deduplicate permission_ids untuk menghindari duplicate constraint violation
+        unique_permission_ids = list(set(permissions_data.permission_ids))
         
-        # Add new user permissions
-        for permission_id in permissions_data.permission_ids:
-            # Verify permission exists
+        # Validasi semua permission_ids exist sebelum insert
+        invalid_permission_ids = []
+        for permission_id in unique_permission_ids:
             permission = self.permission_repo.get(permission_id)
             if not permission:
-                raise NotFoundError(f"Permission dengan ID {permission_id} tidak ditemukan")
-            
-            # Create user permission
-            user_permission = UserPermission(
-                user_id=user_id,
-                permission_id=permission_id
-            )
-            self.db.add(user_permission)
+                invalid_permission_ids.append(permission_id)
         
-        self.db.commit()
-        return True
+        if invalid_permission_ids:
+            raise NotFoundError(
+                f"Permission dengan ID {', '.join(map(str, invalid_permission_ids))} tidak ditemukan"
+            )
+        
+        try:
+            # Delete existing user permissions dan flush untuk memastikan delete sudah dilakukan
+            existing_ups = self.db.query(UserPermission).filter(UserPermission.user_id == user_id).all()
+            for up in existing_ups:
+                self.db.delete(up)
+            
+            # Flush untuk memastikan delete sudah dilakukan sebelum insert
+            self.db.flush()
+            
+            # Add new user permissions - pastikan tidak ada duplicate
+            added_permission_ids = set()
+            for permission_id in unique_permission_ids:
+                # Double check: pastikan tidak ada duplicate dalam batch insert
+                if permission_id in added_permission_ids:
+                    continue  # Skip jika sudah ditambahkan
+                
+                # Create user permission
+                user_permission = UserPermission(
+                    user_id=user_id,
+                    permission_id=permission_id
+                )
+                self.db.add(user_permission)
+                added_permission_ids.add(permission_id)
+            
+            self.db.commit()
+            return True
+            
+        except IntegrityError as e:
+            # Rollback jika terjadi integrity error
+            self.db.rollback()
+            # Parse error untuk memberikan pesan yang lebih spesifik
+            error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+            if 'uq_user_permission' in error_msg or 'Duplicate entry' in error_msg:
+                raise ValidationError(
+                    "Terdapat duplicate permission yang akan di-assign. "
+                    "Pastikan tidak ada permission yang sama dalam daftar."
+                )
+            raise ValidationError(
+                f"Gagal menyimpan permissions: {error_msg}"
+            )
+        except Exception as e:
+            # Rollback untuk semua error lainnya
+            self.db.rollback()
+            raise ValidationError(f"Gagal meng-assign permissions: {str(e)}")
 
     def get_or_create_permission(
         self,

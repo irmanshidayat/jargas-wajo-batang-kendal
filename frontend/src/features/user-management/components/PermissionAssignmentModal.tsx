@@ -26,6 +26,13 @@ const PermissionAssignmentModal: React.FC<PermissionAssignmentModalProps> = ({
     loadData()
   }, [user])
 
+  // Handler untuk memastikan selectedPermissionIds selalu unik
+  const handlePermissionChange = (permissionIds: number[]) => {
+    // Deduplicate untuk memastikan tidak ada duplicate
+    const uniqueIds = Array.from(new Set(permissionIds))
+    setSelectedPermissionIds(uniqueIds)
+  }
+
   const loadData = async () => {
     try {
       setLoadingData(true)
@@ -59,8 +66,12 @@ const PermissionAssignmentModal: React.FC<PermissionAssignmentModalProps> = ({
   const handleSave = async () => {
     try {
       setLoading(true)
+      
+      // Deduplicate permission_ids untuk menghindari duplicate constraint violation
+      const uniquePermissionIds = Array.from(new Set(selectedPermissionIds))
+      
       await userManagementApi.assignUserPermissions(user.id, {
-        permission_ids: selectedPermissionIds,
+        permission_ids: uniquePermissionIds,
       })
 
       await Swal.fire({
@@ -73,10 +84,17 @@ const PermissionAssignmentModal: React.FC<PermissionAssignmentModalProps> = ({
       onSuccess()
       onClose()
     } catch (error: any) {
+      // Extract error message dari response
+      const errorMessage = 
+        error.response?.data?.message || 
+        error.response?.data?.detail || 
+        error.message || 
+        'Gagal menyimpan permissions'
+      
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: error.response?.data?.message || error.message || 'Gagal menyimpan permissions',
+        text: errorMessage,
       })
     } finally {
       setLoading(false)
@@ -98,7 +116,7 @@ const PermissionAssignmentModal: React.FC<PermissionAssignmentModalProps> = ({
           pages={pages}
           permissions={permissions}
           selectedPermissionIds={selectedPermissionIds}
-          onPermissionChange={setSelectedPermissionIds}
+          onPermissionChange={handlePermissionChange}
           isLoading={loadingData}
         />
 
