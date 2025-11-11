@@ -5,6 +5,7 @@ export const API_ENDPOINTS = {
     LOGOUT: '/auth/logout',
     REFRESH: '/auth/refresh',
     PROFILE: '/auth/profile',
+    REGISTER_ADMIN: '/auth/register-admin',
   },
   // Dashboard
   DASHBOARD: {

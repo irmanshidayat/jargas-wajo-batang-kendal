@@ -3,6 +3,13 @@ export interface LoginRequest {
   password: string
 }
 
+export interface RegisterAdminRequest {
+  email: string
+  name: string
+  password: string
+  confirm_password: string
+}
+
 export interface Permission {
   id: number
   page_id: number

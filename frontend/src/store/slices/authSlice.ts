@@ -93,6 +93,21 @@ export const login = createAsyncThunk(
   }
 )
 
+export const registerAdmin = createAsyncThunk(
+  'auth/registerAdmin',
+  async (data: { email: string; name: string; password: string; confirm_password: string }, { rejectWithValue }) => {
+    try {
+      const registerResponse = await authService.registerAdmin(data)
+      const { token, user } = registerResponse
+      localStorage.setItem('token', token)
+      localStorage.setItem('user', JSON.stringify(user))
+      return { token, user }
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.message || error.message || 'Registrasi admin gagal')
+    }
+  }
+)
+
 export const logout = createAsyncThunk('auth/logout', async () => {
   localStorage.removeItem('token')
   localStorage.removeItem('user')
@@ -217,6 +232,33 @@ const authSlice = createSlice({
         }
       })
       .addCase(login.rejected, (state, action) => {
+        state.isLoading = false
+        state.error = action.payload as string
+      })
+      .addCase(registerAdmin.pending, (state) => {
+        state.isLoading = true
+        state.error = null
+      })
+      .addCase(registerAdmin.fulfilled, (state, action) => {
+        state.isLoading = false
+        state.isAuthenticated = true
+        state.token = action.payload.token
+        // Ensure user has permissions array (bukan null atau undefined)
+        const user = action.payload.user
+        if (user && (!user.permissions || !Array.isArray(user.permissions))) {
+          user.permissions = []
+        }
+        state.user = user
+        // Set permissions status ke 'succeeded' jika user sudah punya permissions dari register response
+        // Jika tidak, set ke 'idle' agar di-refresh di Layout
+        if (user && Array.isArray(user.permissions) && user.permissions.length > 0) {
+          state.permissionsStatus = 'succeeded'
+        } else {
+          // Permissions akan di-refresh di Layout component
+          state.permissionsStatus = 'idle'
+        }
+      })
+      .addCase(registerAdmin.rejected, (state, action) => {
         state.isLoading = false
         state.error = action.payload as string
       })

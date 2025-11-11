@@ -3,6 +3,7 @@ import PrivateRoute from './PrivateRoute'
 import PublicRoute from './PublicRoute'
 import Layout from '@/components/layout'
 import LoginPage from '@/features/auth/components/LoginForm'
+import RegisterAdminPage from '@/features/auth/components/RegisterAdminForm'
 import DashboardPage from '@/features/dashboard/pages/DashboardPage'
 import InventoryDashboardPage from '@/features/inventory/pages/InventoryDashboardPage'
 import StockInPage from '@/features/inventory/pages/StockInPage'
@@ -32,6 +33,14 @@ export const router = createBrowserRouter([
     element: (
       <PublicRoute>
         <LoginPage />
+      </PublicRoute>
+    ),
+  },
+  {
+    path: '/registeradmin',
+    element: (
+      <PublicRoute>
+        <RegisterAdminPage />
       </PublicRoute>
     ),
   },
