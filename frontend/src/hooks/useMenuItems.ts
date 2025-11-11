@@ -288,6 +288,13 @@ export const useMenuItems = () => {
 
           const items: MenuItem[] = []
           permissionMap.forEach((permInfo) => {
+            // Filter berdasarkan user menu preferences
+            // Jika tidak ada preference, default ke true (tampilkan)
+            const showInMenu = userMenuPreferences.get(permInfo.page_id)
+            if (showInMenu === false) {
+              return // Skip menu ini
+            }
+            
             items.push({
               label: permInfo.display_name || formatPageName(permInfo.page_name, permInfo.page_path),
               path: permInfo.page_path,
@@ -343,13 +350,12 @@ export const useMenuItems = () => {
       const pageInfo = allPages.find(p => p.path === permInfo.page_path)
       
       // Filter berdasarkan user menu preferences
-      // Jika ada pageInfo dan ada preference, gunakan preference
+      // Gunakan page_id dari permInfo (selalu ada) untuk check preferences
       // Jika tidak ada preference, default ke true (tampilkan)
-      if (pageInfo) {
-        const showInMenu = userMenuPreferences.get(pageInfo.id)
-        if (showInMenu === false) {
-          return // Skip menu ini
-        }
+      const pageIdToCheck = pageInfo?.id ?? permInfo.page_id
+      const showInMenu = userMenuPreferences.get(pageIdToCheck)
+      if (showInMenu === false) {
+        return // Skip menu ini
       }
       
       // Prioritas: display_name dari permission > display_name dari pageInfo > formatPageName
