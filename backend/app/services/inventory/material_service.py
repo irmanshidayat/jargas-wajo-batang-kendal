@@ -90,8 +90,76 @@ class MaterialService(BaseService[MaterialRepository]):
         # Gunakan BaseService.update()
         return super().update(material_id, material_data, project_id=project_id)
 
+    def _check_material_usage(self, material_id: int) -> None:
+        """
+        Cek apakah material masih digunakan di tabel lain
+        Raise ValidationError jika masih digunakan
+        """
+        from app.models.inventory.stock_in import StockIn
+        from app.models.inventory.stock_out import StockOut
+        from app.models.inventory.installed import Installed
+        from app.models.inventory.return_model import Return
+        from app.models.inventory.surat_permintaan_item import SuratPermintaanItem
+        
+        usage_details = []
+        
+        # Cek stock_ins (yang belum dihapus)
+        stock_ins_count = self.db.query(StockIn).filter(
+            StockIn.material_id == material_id,
+            StockIn.is_deleted == 0
+        ).count()
+        if stock_ins_count > 0:
+            usage_details.append(f"{stock_ins_count} data stock in")
+        
+        # Cek stock_outs (yang belum dihapus)
+        stock_outs_count = self.db.query(StockOut).filter(
+            StockOut.material_id == material_id,
+            StockOut.is_deleted == 0
+        ).count()
+        if stock_outs_count > 0:
+            usage_details.append(f"{stock_outs_count} data stock out")
+        
+        # Cek installed (yang belum dihapus)
+        installed_count = self.db.query(Installed).filter(
+            Installed.material_id == material_id,
+            Installed.is_deleted == 0
+        ).count()
+        if installed_count > 0:
+            usage_details.append(f"{installed_count} data installed")
+        
+        # Cek returns (yang belum dihapus)
+        returns_count = self.db.query(Return).filter(
+            Return.material_id == material_id,
+            Return.is_deleted == 0
+        ).count()
+        if returns_count > 0:
+            usage_details.append(f"{returns_count} data return")
+        
+        # Cek surat_permintaan_items (hanya yang memiliki material_id)
+        surat_permintaan_count = self.db.query(SuratPermintaanItem).filter(
+            SuratPermintaanItem.material_id == material_id,
+            SuratPermintaanItem.material_id.isnot(None)
+        ).count()
+        if surat_permintaan_count > 0:
+            usage_details.append(f"{surat_permintaan_count} data surat permintaan")
+        
+        # Jika masih digunakan, raise ValidationError
+        if usage_details:
+            usage_text = ", ".join(usage_details)
+            raise ValidationError(
+                f"Material tidak dapat dihapus karena masih digunakan di: {usage_text}. "
+                f"Hapus data terkait terlebih dahulu."
+            )
+
     def delete(self, material_id: int, project_id: int = None) -> bool:
-        """Hard delete material - benar-benar menghapus dari database"""
+        """
+        Hard delete material - benar-benar menghapus dari database
+        Validasi terlebih dahulu apakah material masih digunakan
+        """
+        # Validasi: cek apakah material masih digunakan
+        self._check_material_usage(material_id)
+        
+        # Jika validasi berhasil, lanjutkan delete
         return super().delete(material_id, project_id=project_id, soft_delete=False)
 
     def bulk_create(self, materials_data: List[Dict[str, Any]], project_id: int) -> Dict[str, Any]:

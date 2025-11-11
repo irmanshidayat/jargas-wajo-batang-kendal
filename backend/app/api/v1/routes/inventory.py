@@ -241,7 +241,7 @@ async def delete_material(
         # Get material before delete for audit log
         material = material_service.get_by_id(material_id, project_id=project_id)
         
-        # Delete material (hard delete)
+        # Delete material (hard delete) - akan validasi terlebih dahulu
         material_service.delete(material_id, project_id=project_id)
         
         # Audit log
@@ -258,6 +258,13 @@ async def delete_material(
         return success_response(
             data=None,
             message="Material berhasil dihapus"
+        )
+    except ValidationError as e:
+        logger.warning(f"Validation error in delete_material: {str(e)}")
+        db.rollback()
+        return error_response(
+            message=str(e),
+            status_code=status.HTTP_400_BAD_REQUEST
         )
     except IntegrityError as e:
         logger.error(f"Integrity error in delete_material: {str(e)}", exc_info=True)
