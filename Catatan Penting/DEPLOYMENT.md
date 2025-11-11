@@ -463,31 +463,165 @@ git branch -a
 
 ### Setup Awal Development Environment
 
-1. **Clone repository ke folder dev:**
+**Prasyarat:**
+- ✅ Server VPS sudah terinstall Docker & Docker Compose
+- ✅ SSH access ke server: `ssh root@72.61.142.109`
+- ✅ DNS A record sudah dibuat: `devjargas.ptkiansantang.com` → `72.61.142.109`
+- ✅ Nginx sudah terinstall di server
+
+**Langkah-langkah Setup:**
+
+#### 1. Clone Repository ke Server
+
 ```bash
+# SSH ke server
 ssh root@72.61.142.109
+
+# Clone repository ke folder dev
 cd ~
-git clone <repository-url> jargas-wajo-batang-kendal-dev
+git clone https://github.com/irmanshidayat/jargas-wajo-batang-kendal.git jargas-wajo-batang-kendal-dev
 cd jargas-wajo-batang-kendal-dev
 git checkout dev
 ```
 
-2. **Setup domain:**
+#### 2. Setup Nginx Configuration
+
+**Opsi A: Menggunakan Script (Recommended)**
 ```powershell
-# Dari Windows
+# Dari Windows PowerShell
 .\scripts\setup-dev-domain.ps1
 ```
 
-3. **Setup SSL:**
+**Opsi B: Manual Setup**
 ```bash
 # Di server
+# Copy config file
+sudo cp ~/jargas-dev.conf /etc/nginx/sites-available/jargas-dev
+
+# Enable site
+sudo ln -sf /etc/nginx/sites-available/jargas-dev /etc/nginx/sites-enabled/jargas-dev
+
+# Test config
+sudo nginx -t
+
+# Reload nginx
+sudo systemctl reload nginx
+```
+
+#### 3. Setup SSL Certificate (Let's Encrypt)
+
+**Prasyarat:** Pastikan DNS A record sudah pointing ke server!
+
+```bash
+# Di server
+sudo apt update
+sudo apt install certbot python3-certbot-nginx -y
+
+# Generate SSL certificate
 sudo certbot --nginx -d devjargas.ptkiansantang.com
 ```
 
-4. **Deploy pertama kali:**
+Certbot akan:
+- Generate certificate otomatis
+- Update nginx config untuk HTTPS
+- Setup auto-renewal
+
+#### 4. Setup Environment Variables
+
+```bash
+# Di server, copy file .env.example
+cd ~/jargas-wajo-batang-kendal-dev
+cp backend/env.example backend/.env
+
+# Edit .env sesuai kebutuhan (gunakan nano atau vi)
+nano backend/.env
+```
+
+**Konfigurasi penting untuk development:**
+- `DB_NAME=jargas_apbn_dev`
+- `DEBUG=True`
+- `CORS_ORIGINS=https://devjargas.ptkiansantang.com,http://localhost:8082`
+
+#### 5. Deploy Pertama Kali
+
+**Opsi A: Menggunakan Script (Recommended)**
 ```powershell
-# Dari Windows
+# Dari Windows PowerShell
 .\scripts\deploy-dev.ps1
+```
+
+**Opsi B: Manual Deploy**
+```bash
+# Di server
+cd ~/jargas-wajo-batang-kendal-dev
+
+# Pull kode terbaru
+git pull origin dev
+
+# Build containers
+docker-compose -f docker-compose.dev.yml build --no-cache
+
+# Start containers (migration otomatis berjalan)
+docker-compose -f docker-compose.dev.yml up -d
+
+# Cek status
+docker-compose -f docker-compose.dev.yml ps
+
+# Cek log migration
+docker-compose -f docker-compose.dev.yml logs backend | grep -i migration
+```
+
+#### 6. Verifikasi Setup
+
+```bash
+# Cek container status
+docker-compose -f docker-compose.dev.yml ps
+
+# Cek health endpoint
+curl http://localhost:8002/health
+# atau
+curl https://devjargas.ptkiansantang.com/api/v1/health
+
+# Cek tabel database
+docker-compose -f docker-compose.dev.yml exec mysql mysql -u root -padmin123 jargas_apbn_dev -e "SHOW TABLES;"
+```
+
+**Akses Aplikasi:**
+- ✅ Frontend: `https://devjargas.ptkiansantang.com`
+- ✅ Backend API: `https://devjargas.ptkiansantang.com/api/v1/health`
+- ✅ Adminer: `http://72.61.142.109:8083` (HTTP, internal)
+
+#### Troubleshooting Setup Awal
+
+**Problem: Container tidak start**
+```bash
+# Cek log error
+docker-compose -f docker-compose.dev.yml logs
+
+# Cek apakah port sudah digunakan
+netstat -tulpn | grep -E '8082|8002|3309|8083'
+```
+
+**Problem: Migration tidak jalan**
+```bash
+# Jalankan migration manual
+docker-compose -f docker-compose.dev.yml exec backend alembic upgrade head
+
+# Cek status migration
+docker-compose -f docker-compose.dev.yml exec backend alembic current
+```
+
+**Problem: Domain tidak bisa diakses**
+```bash
+# Cek nginx config
+sudo nginx -t
+sudo systemctl status nginx
+
+# Cek DNS
+nslookup devjargas.ptkiansantang.com
+
+# Cek firewall
+sudo ufw status
 ```
 
 ### GitHub Actions Setup
