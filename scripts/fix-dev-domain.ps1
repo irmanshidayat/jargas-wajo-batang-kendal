@@ -129,6 +129,13 @@ if ($configStatus -ne "EXISTS" -or $symlinkStatus -ne "EXISTS") {
     $setupCmd = @"
 ssh ${Username}@${ServerIP} '
     if [ -f ~/jargas-dev.conf ]; then
+        # Disable default nginx config jika ada
+        if [ -L /etc/nginx/sites-enabled/default ]; then
+            sudo rm /etc/nginx/sites-enabled/default
+            echo "Default nginx config disabled"
+        fi
+        
+        # Copy dan enable config jargas-dev
         sudo cp ~/jargas-dev.conf /etc/nginx/sites-available/jargas-dev &&
         sudo ln -sf /etc/nginx/sites-available/jargas-dev /etc/nginx/sites-enabled/jargas-dev &&
         sudo nginx -t &&
@@ -183,9 +190,29 @@ if ($containerStatus -notmatch "Up") {
     Write-Host "2.4 Container sudah running, skip..." -ForegroundColor Gray
 }
 
-# Fix 3: Reload nginx untuk memastikan
+# Fix 3: Disable default nginx config jika masih ada
 Write-Host ""
-Write-Host "2.5 Reload nginx..." -ForegroundColor Yellow
+Write-Host "2.5 Disable default nginx config..." -ForegroundColor Yellow
+$disableDefault = @"
+ssh ${Username}@${ServerIP} 'if [ -L /etc/nginx/sites-enabled/default ]; then sudo rm /etc/nginx/sites-enabled/default && echo "DISABLED" || echo "NOT_FOUND"; else echo "ALREADY_DISABLED"; fi'
+"@
+try {
+    $disableResult = Invoke-Expression $disableDefault | Out-String
+    $disableResult = $disableResult.Trim()
+    if ($disableResult -match "DISABLED") {
+        Write-Host "   [OK] Default nginx config disabled" -ForegroundColor Green
+    } elseif ($disableResult -match "ALREADY_DISABLED") {
+        Write-Host "   [OK] Default nginx config sudah disabled" -ForegroundColor Gray
+    } else {
+        Write-Host "   [INFO] Default nginx config tidak ditemukan" -ForegroundColor Gray
+    }
+} catch {
+    Write-Host "   [WARNING] Tidak bisa disable default config" -ForegroundColor Yellow
+}
+
+# Fix 4: Reload nginx untuk memastikan
+Write-Host ""
+Write-Host "2.6 Reload nginx..." -ForegroundColor Yellow
 $reloadNginx = "ssh ${Username}@${ServerIP} 'sudo nginx -t && sudo systemctl reload nginx'"
 try {
     Invoke-Expression $reloadNginx
@@ -219,6 +246,30 @@ try {
     Write-Host "   [OK] Nginx config valid" -ForegroundColor Green
 } catch {
     Write-Host "   [ERROR] Nginx config error!" -ForegroundColor Red
+}
+
+# Verifikasi enabled sites
+Write-Host ""
+Write-Host "3.2.1 Verifikasi enabled nginx sites..." -ForegroundColor Cyan
+$checkEnabled = @"
+ssh ${Username}@${ServerIP} 'ls -la /etc/nginx/sites-enabled/ | grep -E "jargas-dev|default"'
+"@
+try {
+    $enabledSites = Invoke-Expression $checkEnabled | Out-String
+    if ($enabledSites -match "jargas-dev") {
+        Write-Host "   [OK] jargas-dev config enabled" -ForegroundColor Green
+    } else {
+        Write-Host "   [ERROR] jargas-dev config TIDAK enabled!" -ForegroundColor Red
+    }
+    if ($enabledSites -match "default") {
+        Write-Host "   [WARNING] Default nginx config masih enabled!" -ForegroundColor Yellow
+    } else {
+        Write-Host "   [OK] Default nginx config disabled" -ForegroundColor Green
+    }
+    Write-Host "   Enabled sites:" -ForegroundColor Gray
+    Write-Host $enabledSites -ForegroundColor Gray
+} catch {
+    Write-Host "   [WARNING] Tidak bisa cek enabled sites" -ForegroundColor Yellow
 }
 
 # Test health endpoint
