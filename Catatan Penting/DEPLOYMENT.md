@@ -338,11 +338,35 @@ Project ini menggunakan 2 branch utama:
 
 ### Deployment Production
 
-**Lokal:**
+**Lokal - Cara Update ke Branch Main (Setelah Testing di Dev):**
+
+**⚠️ PENTING: Selalu test di dev terlebih dahulu sebelum push ke main!**
+
+```powershell
+# 1. Pastikan semua perubahan sudah di-test di dev
+# 2. Pindah ke branch main
+git checkout main
+
+# 3. Pull update terbaru dari main
+git pull origin main
+
+# 4. Merge dev ke main
+git merge dev
+
+# 5. Resolve conflict jika ada (jika tidak ada conflict, skip langkah ini)
+# Edit file yang conflict, lalu:
+git add .
+git commit -m "merge: Merge dev ke main"
+
+# 6. Push ke main (akan deploy ke production)
+git push origin main
+```
+
+**Atau dengan Rebase (untuk history yang lebih bersih):**
 ```powershell
 git checkout main
-git add .
-git commit -m "Update production"
+git pull origin main
+git rebase dev
 git push origin main
 ```
 
@@ -356,14 +380,69 @@ git push origin main
 .\scripts\deploy-with-migration.ps1
 ```
 
+**Verifikasi Setelah Push ke Main:**
+1. Cek GitHub Actions: Repository → Actions → "Deploy Production"
+2. Tunggu deployment selesai (biasanya 5-10 menit)
+3. Akses: `https://jargas.ptkiansantang.com/`
+4. Cek health: `https://jargas.ptkiansantang.com/api/v1/health`
+
 ### Deployment Development
 
-**Lokal:**
+**Lokal - Cara Update ke Branch Dev (Tidak Langsung ke Main):**
+
+**Metode 1: Langsung Push ke Branch Dev (Recommended)**
 ```powershell
+# 1. Pastikan Anda di branch dev
 git checkout dev
+
+# 2. Pull update terbaru dari dev (jika ada)
+git pull origin dev
+
+# 3. Cek status perubahan
+git status
+
+# 4. Tambahkan file yang diubah
 git add .
-git commit -m "Update development"
+
+# 5. Commit perubahan
+git commit -m "feat: Deskripsi perubahan"
+
+# 6. Push ke branch dev
 git push origin dev
+```
+
+**Metode 2: Jika Lupa dan Sudah Commit di Branch Lain**
+```powershell
+# Jika sudah commit di branch lain, pindahkan ke dev
+git checkout dev
+git cherry-pick <commit-hash>
+git push origin dev
+
+# Atau merge branch lain ke dev
+git checkout dev
+git merge <nama-branch-lain>
+git push origin dev
+```
+
+**Metode 3: Set Upstream (Hanya Sekali)**
+```powershell
+# Set upstream untuk branch dev (hanya sekali)
+git checkout dev
+git push -u origin dev
+
+# Setelah ini, cukup ketik: git push
+```
+
+**Cek Branch Aktif:**
+```powershell
+# Cek branch yang sedang aktif
+git branch
+
+# Atau dengan status
+git status
+
+# Cek semua branch (lokal dan remote)
+git branch -a
 ```
 
 **Server (Otomatis via GitHub Actions):**
@@ -375,6 +454,12 @@ git push origin dev
 # Dari Windows
 .\scripts\deploy-dev.ps1
 ```
+
+**Verifikasi Setelah Push ke Dev:**
+1. Cek GitHub Actions: Repository → Actions → "Deploy Development"
+2. Tunggu deployment selesai (biasanya 5-10 menit)
+3. Akses: `https://devjargas.ptkiansantang.com/`
+4. Cek health: `https://devjargas.ptkiansantang.com/api/v1/health`
 
 ### Setup Awal Development Environment
 
@@ -427,17 +512,33 @@ ssh-copy-id -i ~/.ssh/github_actions.pub root@72.61.142.109
    - Push ke branch `main` → Auto-deploy production
    - Push ke branch `dev` → Auto-deploy development
 
+### Perbedaan Update ke Dev vs Main
+
+| Aspek | Branch Dev | Branch Main |
+|-------|------------|------------|
+| **Tujuan** | Testing & Development | Production |
+| **Domain** | devjargas.ptkiansantang.com | jargas.ptkiansantang.com |
+| **Database** | jargas_apbn_dev | jargas_apbn |
+| **Port** | 8082, 8002, 3309, 8083 | 8080, 8001, 3308, 8081 |
+| **Auto-Deploy** | ✅ Ya (via GitHub Actions) | ✅ Ya (via GitHub Actions) |
+| **Kapan Update** | Setiap perubahan kode | Setelah testing di dev |
+| **Risiko** | Rendah (tidak mempengaruhi production) | Tinggi (langsung ke production) |
+
 ### Best Practices
 
 1. **Selalu test di dev sebelum merge ke main**
-2. **Gunakan commit message yang jelas**
+2. **Gunakan commit message yang jelas** (contoh: `feat:`, `fix:`, `refactor:`)
 3. **Monitor deployment logs di GitHub Actions**
 4. **Backup database sebelum deploy production**
 5. **Gunakan feature branch untuk fitur besar**
+6. **Jangan langsung push ke main** - selalu lewat dev dulu
+7. **Cek branch aktif sebelum commit** - gunakan `git branch` atau `git status`
 
 ### Workflow Development
 
-```bash
+**Workflow Lengkap dari Development ke Production:**
+
+```powershell
 # 1. Buat feature branch dari dev
 git checkout dev
 git pull origin dev
@@ -455,12 +556,204 @@ git checkout dev
 git merge feature/nama-fitur
 git push origin dev  # Auto-deploy ke devjargas.ptkiansantang.com
 
-# 5. Setelah testing, merge ke main untuk production
+# 5. Test di devjargas.ptkiansantang.com
+# - Cek semua fitur berjalan dengan baik
+# - Test edge cases
+# - Verifikasi tidak ada bug
+
+# 6. Setelah testing selesai, merge ke main untuk production
 git checkout main
+git pull origin main
 git merge dev
 git push origin main  # Auto-deploy ke jargas.ptkiansantang.com
 ```
 
+**Workflow Cepat (Tanpa Feature Branch):**
+
+```powershell
+# Untuk perubahan kecil, bisa langsung ke dev
+git checkout dev
+git pull origin dev
+git add .
+git commit -m "fix: Perbaikan bug kecil"
+git push origin dev  # Auto-deploy ke devjargas.ptkiansantang.com
+
+# Setelah testing, merge ke main
+git checkout main
+git pull origin main
+git merge dev
+git push origin main  # Auto-deploy ke jargas.ptkiansantang.com
+```
+
+### Troubleshooting Multi-Environment
+
+**Problem: Lupa Branch dan Sudah Commit di Branch Salah**
+
+```powershell
+# Cek di branch mana
+git branch
+
+# Jika sudah commit di branch salah, pindahkan ke dev
+git checkout dev
+git cherry-pick <commit-hash>
+git push origin dev
+
+# Atau reset commit (jika belum push)
+git reset HEAD~1  # Hapus commit terakhir, tetap simpan perubahan
+git checkout dev
+git add .
+git commit -m "feat: Perubahan"
+git push origin dev
+```
+
+**Problem: Conflict Saat Merge Dev ke Main**
+
+```powershell
+git checkout main
+git merge dev
+
+# Jika ada conflict:
+# 1. Edit file yang conflict
+# 2. Resolve conflict (pilih perubahan yang benar)
+# 3. git add .
+# 4. git commit -m "merge: Resolve conflict dev ke main"
+# 5. git push origin main
+```
+
+**Problem: Push ke Branch Salah**
+
+```powershell
+# Jika sudah push ke main padahal seharusnya dev
+# 1. Revert commit di main
+git checkout main
+git revert <commit-hash>
+git push origin main
+
+# 2. Push ke dev
+git checkout dev
+git cherry-pick <commit-hash>
+git push origin dev
+```
+
+**Problem: Branch Dev Tidak Update**
+
+```powershell
+# Pastikan branch dev sudah di-push
+git checkout dev
+git push origin dev
+
+# Cek apakah branch dev ada di remote
+git branch -r
+
+# Jika belum ada, push dengan upstream
+git push -u origin dev
+```
+
+**Problem: Deployment Dev Tidak Jalan**
+
+1. **Cek GitHub Actions:**
+   - Repository → Actions → "Deploy Development"
+   - Lihat log error jika ada
+
+2. **Cek Server:**
+   ```bash
+   ssh root@72.61.142.109
+   cd ~/jargas-wajo-batang-kendal-dev
+   git pull origin dev
+   docker-compose -f docker-compose.dev.yml ps
+   docker-compose -f docker-compose.dev.yml logs
+   ```
+
+3. **Manual Deploy:**
+   ```powershell
+   .\scripts\deploy-dev.ps1
+   ```
+
 ---
 
-**Terakhir diupdate:** 2025-01-27 (ditambahkan: Multi-Environment Deployment)
+### Script PowerShell untuk Push ke Branch Dev
+
+Buat file `scripts/push-to-dev.ps1` untuk memudahkan push ke dev:
+
+```powershell
+# Script untuk push perubahan ke branch dev
+param(
+    [string]$Message = "Update development"
+)
+
+Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "Push ke Branch Dev" -ForegroundColor Cyan
+Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host ""
+
+# Cek branch aktif
+$currentBranch = git branch --show-current
+Write-Host "Branch aktif: $currentBranch" -ForegroundColor Yellow
+
+if ($currentBranch -ne "dev") {
+    Write-Host "⚠️  Anda tidak di branch dev!" -ForegroundColor Yellow
+    $switch = Read-Host "Switch ke branch dev? (y/n)"
+    if ($switch -eq "y" -or $switch -eq "Y") {
+        git checkout dev
+        Write-Host "✅ Switched ke branch dev" -ForegroundColor Green
+    } else {
+        Write-Host "❌ Push dibatalkan" -ForegroundColor Red
+        exit 1
+    }
+}
+
+Write-Host ""
+Write-Host "Step 1: Pull update terbaru..." -ForegroundColor Green
+git pull origin dev
+Write-Host "✅ Pull berhasil" -ForegroundColor Green
+
+Write-Host ""
+Write-Host "Step 2: Cek status perubahan..." -ForegroundColor Green
+git status
+
+Write-Host ""
+$confirm = Read-Host "Lanjutkan push ke dev? (y/n)"
+if ($confirm -ne "y" -and $confirm -ne "Y") {
+    Write-Host "Push dibatalkan." -ForegroundColor Yellow
+    exit 0
+}
+
+Write-Host ""
+Write-Host "Step 3: Add perubahan..." -ForegroundColor Green
+git add .
+Write-Host "✅ Files added" -ForegroundColor Green
+
+Write-Host ""
+Write-Host "Step 4: Commit..." -ForegroundColor Green
+git commit -m $Message
+Write-Host "✅ Committed" -ForegroundColor Green
+
+Write-Host ""
+Write-Host "Step 5: Push ke dev..." -ForegroundColor Green
+git push origin dev
+Write-Host "✅ Pushed to dev" -ForegroundColor Green
+
+Write-Host ""
+Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "Push ke Dev Selesai!" -ForegroundColor Green
+Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Langkah Selanjutnya:" -ForegroundColor Yellow
+Write-Host "1. Cek GitHub Actions untuk deployment" -ForegroundColor White
+Write-Host "2. Tunggu deployment selesai (5-10 menit)" -ForegroundColor White
+Write-Host "3. Test di: https://devjargas.ptkiansantang.com" -ForegroundColor White
+Write-Host ""
+```
+
+**Cara menggunakan:**
+```powershell
+# Dengan default message
+.\scripts\push-to-dev.ps1
+
+# Dengan custom message
+.\scripts\push-to-dev.ps1 -Message "feat: Tambah fitur export Excel"
+```
+
+---
+
+**Terakhir diupdate:** 2025-01-27 (ditambahkan: Multi-Environment Deployment, Workflow Git Lengkap)
