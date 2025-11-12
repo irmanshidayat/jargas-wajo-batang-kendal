@@ -171,11 +171,25 @@ ssh-keygen -t ed25519 -C "github-actions" -f ~/.ssh/github_actions
 ssh-copy-id -i ~/.ssh/github_actions.pub root@72.61.142.109
 ```
 
-**Opsi 3: Manual copy (jika ssh-copy-id tidak tersedia):**
+**Opsi 3: Manual copy via SSH dengan password:**
 ```powershell
-# Di Windows PowerShell
-Get-Content "$env:USERPROFILE\.ssh\github_actions.pub" | ssh root@72.61.142.109 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+# Di Windows PowerShell (akan minta password sekali)
+$publicKey = Get-Content "$env:USERPROFILE\.ssh\github_actions.pub" -Raw
+echo $publicKey.Trim() | ssh root@72.61.142.109 "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
 ```
+
+**Opsi 4: Copy manual (jika semua opsi di atas gagal):**
+1. Buka file: `$env:USERPROFILE\.ssh\github_actions.pub`
+2. Copy seluruh isinya (contoh: `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC1EpYbTekG20g8y8Vo6wjLyy3AgCAEKdVYfoXKL3zb4 github-actions`)
+3. SSH ke server: `ssh root@72.61.142.109`
+4. Jalankan perintah di server:
+   ```bash
+   mkdir -p ~/.ssh
+   chmod 700 ~/.ssh
+   echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC1EpYbTekG20g8y8Vo6wjLyy3AgCAEKdVYfoXKL3zb4 github-actions" >> ~/.ssh/authorized_keys
+   chmod 600 ~/.ssh/authorized_keys
+   ```
+   (Ganti dengan public key Anda yang sebenarnya)
 
 **Verifikasi:**
 ```bash

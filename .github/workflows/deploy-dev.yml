@@ -42,28 +42,37 @@ jobs:
 
       - name: Deploy to Development Server
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} bash -s << 'DEPLOY_SCRIPT'
             set -e
+            
+            PROJECT_PATH="${{ env.PROJECT_PATH }}"
             
             echo "=========================================="
             echo "🚀 Starting Deployment Process"
             echo "=========================================="
+            echo "Project Path: $PROJECT_PATH"
+            echo ""
             
             # Step 1: Verify project path exists
-            echo ""
             echo "Step 1: Verifying project path..."
-            if [ ! -d "${{ env.PROJECT_PATH }}" ]; then
-              echo "❌ Error: Project path does not exist: ${{ env.PROJECT_PATH }}"
+            if [ ! -d "$PROJECT_PATH" ]; then
+              echo "❌ Error: Project path does not exist: $PROJECT_PATH"
               echo "Please create the directory first or check the path"
-              exit 1
+              echo "Creating directory..."
+              mkdir -p "$PROJECT_PATH" || {
+                echo "❌ Error: Cannot create directory $PROJECT_PATH"
+                exit 1
+              }
+              echo "✅ Directory created"
+            else
+              echo "✅ Project path exists"
             fi
-            echo "✅ Project path exists"
             
             # Step 2: Navigate to project directory
             echo ""
             echo "Step 2: Navigating to project directory..."
-            cd ${{ env.PROJECT_PATH }} || {
-              echo "❌ Error: Cannot cd to ${{ env.PROJECT_PATH }}"
+            cd "$PROJECT_PATH" || {
+              echo "❌ Error: Cannot cd to $PROJECT_PATH"
               exit 1
             }
             echo "✅ Current directory: $(pwd)"
@@ -176,7 +185,7 @@ jobs:
             echo "🌐 Frontend: https://devjargas.ptkiansantang.com"
             echo "🔗 Backend: https://devjargas.ptkiansantang.com/api/v1/health"
             echo ""
-          EOF
+          DEPLOY_SCRIPT
 
       - name: Health Check
         run: |
