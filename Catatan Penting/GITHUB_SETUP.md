@@ -368,7 +368,7 @@ main (production) ←─── dev (development) ←─── feature/xxx
 **Penjelasan:**
 - **main**: Branch untuk production (kode yang sudah stabil)
 - **dev**: Branch untuk development dan testing
-- **feature/xxx**: Branch untuk fitur spesifik (opsional)
+- **feature/xxx**: Branch untuk fitur spesifik (opsionall)
 
 ---
 
