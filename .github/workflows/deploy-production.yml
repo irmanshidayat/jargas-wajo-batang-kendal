@@ -10,6 +10,7 @@ env:
   SERVER_IP: 72.61.142.109
   SERVER_USER: root
   PROJECT_PATH: ~/jargas-wajo-batang-kendal
+  GITHUB_REPO: https://github.com/irmanshidayat/jargas-wajo-batang-kendal.git
 
 jobs:
   deploy:
@@ -28,49 +29,291 @@ jobs:
         run: |
           ssh-keyscan -H ${{ env.SERVER_IP }} >> ~/.ssh/known_hosts
 
+      - name: Test SSH Connection
+        run: |
+          echo "🔍 Testing SSH connection..."
+          ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} 'echo "✅ SSH connection successful!"' || {
+            echo "❌ SSH connection failed!"
+            echo "Please verify:"
+            echo "1. Public key is added to server ~/.ssh/authorized_keys"
+            echo "2. SSH_PRIVATE_KEY secret is correctly configured in GitHub"
+            echo "3. Server is accessible: ${{ env.SERVER_IP }}"
+            exit 1
+          }
+
       - name: Deploy to Production Server
         run: |
-          ssh ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} bash -s << 'DEPLOY_SCRIPT'
             set -e
-            cd ${{ env.PROJECT_PATH }}
             
-            echo "📥 Pulling latest code from main branch..."
-            git fetch origin
-            git checkout main
-            git reset --hard origin/main
+            # Expand ~ to full path
+            PROJECT_PATH="${{ env.PROJECT_PATH }}"
+            PROJECT_PATH=$(eval echo "$PROJECT_PATH")
+            GITHUB_REPO="${{ env.GITHUB_REPO }}"
             
-            echo "🔍 Verifying environment files..."
-            if [ ! -f .env ] || [ ! -f backend/.env ]; then
-              echo "❌ Error: .env files not found!"
-              echo "Please ensure .env and backend/.env exist on server"
+            echo "=========================================="
+            echo "🚀 Starting Deployment Process"
+            echo "=========================================="
+            echo "Project Path: $PROJECT_PATH"
+            echo "GitHub Repo: $GITHUB_REPO"
+            echo ""
+            
+            # Step 1: Verify project path exists
+            echo "Step 1: Verifying project path..."
+            if [ ! -d "$PROJECT_PATH" ]; then
+              echo "⚠️  Project path does not exist: $PROJECT_PATH"
+              echo "Creating directory..."
+              mkdir -p "$PROJECT_PATH" || {
+                echo "❌ Error: Cannot create directory $PROJECT_PATH"
+                exit 1
+              }
+              echo "✅ Directory created"
+            else
+              echo "✅ Project path exists"
+            fi
+            
+            # Step 2: Navigate to project directory
+            echo ""
+            echo "Step 2: Navigating to project directory..."
+            cd "$PROJECT_PATH" || {
+              echo "❌ Error: Cannot cd to $PROJECT_PATH"
+              exit 1
+            }
+            echo "✅ Current directory: $(pwd)"
+            
+            # Step 3: Check if Git repository exists, if not clone it
+            echo ""
+            echo "Step 3: Checking Git repository..."
+            if [ ! -d ".git" ]; then
+              echo "⚠️  Git repository not found in $PROJECT_PATH"
+              echo "Checking if directory is empty..."
+              FILE_COUNT=$(find . -maxdepth 1 -not -name '.' -not -name '..' 2>/dev/null | wc -l)
+              if [ "$FILE_COUNT" -gt 0 ]; then
+                echo "⚠️  Directory is not empty ($FILE_COUNT items found)"
+                echo "Files in directory:"
+                ls -la | head -10
+                echo ""
+                echo "Initializing git repository in existing directory..."
+                git init || {
+                  echo "❌ Error: Cannot initialize git repository"
+                  exit 1
+                }
+                # Check if remote already exists
+                if ! git remote get-url origin >/dev/null 2>&1; then
+                  git remote add origin "$GITHUB_REPO" || {
+                    echo "❌ Error: Cannot add remote origin"
+                    exit 1
+                  }
+                else
+                  echo "⚠️  Remote origin already exists, updating URL..."
+                  git remote set-url origin "$GITHUB_REPO" || {
+                    echo "⚠️  Warning: Cannot update remote URL"
+                  }
+                fi
+                echo "✅ Git repository initialized"
+              else
+                echo "Directory is empty, cloning repository..."
+                git clone -b main "$GITHUB_REPO" . || {
+                  echo "❌ Error: Cannot clone repository"
+                  exit 1
+                }
+                echo "✅ Repository cloned successfully"
+              fi
+            else
+              echo "✅ Git repository found"
+            fi
+            
+            # Step 4: Pull latest code
+            echo ""
+            echo "Step 4: Pulling latest code from main branch..."
+            # Fetch latest changes
+            if ! git fetch origin 2>&1; then
+              echo "⚠️  Warning: git fetch failed, checking remote..."
+              if ! git remote get-url origin >/dev/null 2>&1; then
+                echo "⚠️  No remote origin found, adding remote..."
+                git remote add origin "$GITHUB_REPO" || {
+                  echo "❌ Error: Cannot add remote origin"
+                  exit 1
+                }
+                git fetch origin || {
+                  echo "❌ Error: Cannot fetch from remote"
+                  exit 1
+                }
+              fi
+            fi
+            
+            # Checkout main branch
+            if ! git checkout main 2>&1; then
+              echo "⚠️  Cannot checkout main branch, trying to create it from origin/main..."
+              git checkout -b main origin/main 2>&1 || {
+                echo "❌ Error: Cannot checkout or create main branch"
+                echo "Current branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"
+                echo "Available branches:"
+                git branch -a || true
+                exit 1
+              }
+            fi
+            
+            # Reset to origin/main
+            if ! git reset --hard origin/main 2>&1; then
+              echo "❌ Error: Cannot reset to origin/main"
+              echo "Please check if main branch exists in remote"
+              echo "Current branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"
+              echo "Remote branches:"
+              git branch -r || true
               exit 1
             fi
-            echo "✅ Environment files found"
+            echo "✅ Code updated to latest main branch"
+            echo "   Commit: $(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
             
-            echo "🔨 Building Docker containers (production)..."
-            docker-compose --env-file .env build --no-cache
+            # Step 5: Verify and create environment files if needed
+            echo ""
+            echo "Step 5: Verifying environment files..."
             
-            echo "🛑 Stopping containers..."
-            docker-compose --env-file .env down
+            # Check and create .env from template
+            if [ ! -f .env ]; then
+              echo "⚠️  .env not found in project root"
+              if [ -f env.example ]; then
+                echo "Creating .env from env.example template..."
+                cp env.example .env || {
+                  echo "❌ Error: Cannot create .env from template"
+                  exit 1
+                }
+                echo "✅ .env created from template"
+                echo "⚠️  WARNING: Please review and update .env with correct values!"
+                echo "   Especially SECRET_KEY, DB_PASSWORD, and other sensitive values"
+              else
+                echo "❌ Error: .env not found and env.example template also not found"
+                echo "Current directory: $(pwd)"
+                echo "Files in current directory:"
+                ls -la | head -10
+                exit 1
+              fi
+            else
+              echo "✅ .env found"
+            fi
             
-            echo "🚀 Starting containers..."
-            docker-compose --env-file .env up -d
+            # Check and create backend/.env from template
+            if [ ! -f backend/.env ]; then
+              echo "⚠️  backend/.env not found"
+              if [ -f backend/env.example ]; then
+                echo "Creating backend/.env from backend/env.example template..."
+                cp backend/env.example backend/.env || {
+                  echo "❌ Error: Cannot create backend/.env from template"
+                  exit 1
+                }
+                echo "✅ backend/.env created from template"
+                echo "⚠️  WARNING: Please review and update backend/.env with correct values!"
+              elif [ -f env.example ]; then
+                echo "Creating backend/.env from root env.example template..."
+                cp env.example backend/.env || {
+                  echo "❌ Error: Cannot create backend/.env from template"
+                  exit 1
+                }
+                echo "✅ backend/.env created from root template"
+                echo "⚠️  WARNING: Please review and update backend/.env with correct values!"
+              else
+                echo "❌ Error: backend/.env not found and no template available"
+                echo "Files in backend directory:"
+                ls -la backend/ | head -10 || echo "backend/ directory does not exist"
+                exit 1
+              fi
+            else
+              echo "✅ backend/.env found"
+            fi
             
-            echo "⏳ Waiting for services to be ready..."
+            echo "✅ Environment files verified/created"
+            
+            # Step 6: Verify docker-compose file exists
+            echo ""
+            echo "Step 6: Verifying docker-compose.yml..."
+            if [ ! -f docker-compose.yml ]; then
+              echo "❌ Error: docker-compose.yml not found"
+              exit 1
+            fi
+            echo "✅ docker-compose.yml found"
+            
+            # Step 7: Build Docker containers
+            echo ""
+            echo "Step 7: Building Docker containers (production)..."
+            if ! docker-compose --env-file .env build --no-cache 2>&1; then
+              echo "❌ Error: Docker build failed"
+              echo "Checking Docker status..."
+              docker ps -a || echo "Docker not accessible"
+              exit 1
+            fi
+            echo "✅ Docker build completed"
+            
+            # Step 8: Stop existing containers
+            echo ""
+            echo "Step 8: Stopping existing containers..."
+            docker-compose --env-file .env down 2>&1 || {
+              echo "⚠️  Warning: Some containers may not have stopped cleanly"
+            }
+            echo "✅ Containers stopped"
+            
+            # Step 9: Start containers
+            echo ""
+            echo "Step 9: Starting containers..."
+            if ! docker-compose --env-file .env up -d 2>&1; then
+              echo "❌ Error: Failed to start containers"
+              echo "Checking container status..."
+              docker-compose --env-file .env ps || true
+              echo "Checking logs..."
+              docker-compose --env-file .env logs --tail=50 || true
+              exit 1
+            fi
+            echo "✅ Containers started"
+            
+            # Step 10: Wait for services
+            echo ""
+            echo "Step 10: Waiting for services to be ready..."
             sleep 30
             
-            echo "📋 Checking container status..."
+            # Step 11: Check container status
+            echo ""
+            echo "Step 11: Checking container status..."
             docker-compose --env-file .env ps
             
+            # Check if containers are running
+            RUNNING_CONTAINERS=$(docker-compose --env-file .env ps -q | wc -l)
+            if [ "$RUNNING_CONTAINERS" -eq 0 ]; then
+              echo "⚠️  Warning: No containers are running"
+              echo "Checking logs for errors..."
+              docker-compose --env-file .env logs --tail=100 || true
+            else
+              echo "✅ $RUNNING_CONTAINERS container(s) running"
+            fi
+            
+            echo ""
+            echo "=========================================="
             echo "✅ Deployment completed!"
+            echo "=========================================="
             echo "🌐 Frontend: https://jargas.ptkiansantang.com"
             echo "🔗 Backend: https://jargas.ptkiansantang.com/health"
-          EOF
+            echo ""
+          DEPLOY_SCRIPT
 
       - name: Health Check
         run: |
-          sleep 10
-          curl -f https://jargas.ptkiansantang.com/health || exit 1
+          echo "🔍 Waiting for services to be fully ready..."
+          sleep 15
+          echo "🏥 Testing health endpoint..."
+          # Try /health first (nginx static endpoint)
+          if curl -f -s https://jargas.ptkiansantang.com/health > /dev/null 2>&1; then
+            echo "✅ Health check passed: /health"
+          # Fallback to /api/v1/health (backend endpoint)
+          elif curl -f -s https://jargas.ptkiansantang.com/api/v1/health > /dev/null 2>&1; then
+            echo "✅ Health check passed: /api/v1/health"
+          else
+            echo "❌ Health check failed for both endpoints"
+            echo "Checking /health response:"
+            curl -v https://jargas.ptkiansantang.com/health || true
+            echo ""
+            echo "Checking /api/v1/health response:"
+            curl -v https://jargas.ptkiansantang.com/api/v1/health || true
+            exit 1
+          fi
 
       - name: Deployment Summary
         run: |
