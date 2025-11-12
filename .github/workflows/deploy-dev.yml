@@ -166,24 +166,63 @@ jobs:
             echo "✅ Code updated to latest dev branch"
             echo "   Commit: $(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
             
-            # Step 5: Verify environment files
+            # Step 5: Verify and create environment files if needed
             echo ""
             echo "Step 5: Verifying environment files..."
+            
+            # Check and create .env.dev from template
             if [ ! -f .env.dev ]; then
-              echo "❌ Error: .env.dev not found in project root"
-              echo "Current directory: $(pwd)"
-              echo "Files in current directory:"
-              ls -la | head -10
-              exit 1
+              echo "⚠️  .env.dev not found in project root"
+              if [ -f env.dev.example ]; then
+                echo "Creating .env.dev from env.dev.example template..."
+                cp env.dev.example .env.dev || {
+                  echo "❌ Error: Cannot create .env.dev from template"
+                  exit 1
+                }
+                echo "✅ .env.dev created from template"
+                echo "⚠️  WARNING: Please review and update .env.dev with correct values!"
+                echo "   Especially SECRET_KEY, DB_PASSWORD, and other sensitive values"
+              else
+                echo "❌ Error: .env.dev not found and env.dev.example template also not found"
+                echo "Current directory: $(pwd)"
+                echo "Files in current directory:"
+                ls -la | head -10
+                exit 1
+              fi
+            else
+              echo "✅ .env.dev found"
             fi
             
+            # Check and create backend/.env.dev from template
             if [ ! -f backend/.env.dev ]; then
-              echo "❌ Error: backend/.env.dev not found"
-              echo "Files in backend directory:"
-              ls -la backend/ | head -10 || echo "backend/ directory does not exist"
-              exit 1
+              echo "⚠️  backend/.env.dev not found"
+              if [ -f backend/env.dev.example ]; then
+                echo "Creating backend/.env.dev from backend/env.dev.example template..."
+                cp backend/env.dev.example backend/.env.dev || {
+                  echo "❌ Error: Cannot create backend/.env.dev from template"
+                  exit 1
+                }
+                echo "✅ backend/.env.dev created from template"
+                echo "⚠️  WARNING: Please review and update backend/.env.dev with correct values!"
+              elif [ -f env.dev.example ]; then
+                echo "Creating backend/.env.dev from root env.dev.example template..."
+                cp env.dev.example backend/.env.dev || {
+                  echo "❌ Error: Cannot create backend/.env.dev from template"
+                  exit 1
+                }
+                echo "✅ backend/.env.dev created from root template"
+                echo "⚠️  WARNING: Please review and update backend/.env.dev with correct values!"
+              else
+                echo "❌ Error: backend/.env.dev not found and no template available"
+                echo "Files in backend directory:"
+                ls -la backend/ | head -10 || echo "backend/ directory does not exist"
+                exit 1
+              fi
+            else
+              echo "✅ backend/.env.dev found"
             fi
-            echo "✅ Environment files found"
+            
+            echo "✅ Environment files verified/created"
             
             # Step 6: Verify docker-compose file exists
             echo ""
