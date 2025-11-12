@@ -171,7 +171,7 @@ ssh-copy-id -i ~/.ssh/github_actions.pub root@72.61.142.109
    - **Name**: `SSH_PRIVATE_KEY` (harus sama persis, case-sensitive)
    - **Value**: Copy seluruh isi dari file `~/.ssh/github_actions` (termasuk `-----BEGIN OPENSSH PRIVATE KEY-----` dan `-----END OPENSSH PRIVATE KEY-----`)
    - Klik **Add secret**
-   
+   .
    **Cara copy private key di Windows PowerShell:**
    ```powershell
    Get-Content "$env:USERPROFILE\.ssh\github_actions" | Set-Clipboard
