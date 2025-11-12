@@ -290,20 +290,20 @@ jobs:
             echo "✅ Deployment completed!"
             echo "=========================================="
             echo "🌐 Frontend: https://devjargas.ptkiansantang.com"
-            echo "🔗 Backend: https://devjargas.ptkiansantang.com/api/v1/health"
+            echo "🔗 Backend: https://devjargas.ptkiansantang.com/health"
             echo ""
           DEPLOY_SCRIPT
 
       - name: Health Check
         run: |
           sleep 10
-          curl -f https://devjargas.ptkiansantang.com/api/v1/health || exit 1
+          curl -f https://devjargas.ptkiansantang.com/health || exit 1
 
       - name: Deployment Summary
         run: |
           echo "## ✅ Development Deployment Successful" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Frontend**: https://devjargas.ptkiansantang.com" >> $GITHUB_STEP_SUMMARY
-          echo "- **Backend**: https://devjargas.ptkiansantang.com/api/v1/health" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend**: https://devjargas.ptkiansantang.com/health" >> $GITHUB_STEP_SUMMARY
           echo "- **Deployed at**: $(date)" >> $GITHUB_STEP_SUMMARY
 

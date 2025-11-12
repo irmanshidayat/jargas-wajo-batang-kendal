@@ -64,19 +64,19 @@ jobs:
             
             echo "✅ Deployment completed!"
             echo "🌐 Frontend: https://jargas.ptkiansantang.com"
-            echo "🔗 Backend: https://jargas.ptkiansantang.com/api/v1/health"
+            echo "🔗 Backend: https://jargas.ptkiansantang.com/health"
           EOF
 
       - name: Health Check
         run: |
           sleep 10
-          curl -f https://jargas.ptkiansantang.com/api/v1/health || exit 1
+          curl -f https://jargas.ptkiansantang.com/health || exit 1
 
       - name: Deployment Summary
         run: |
           echo "## ✅ Production Deployment Successful" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Frontend**: https://jargas.ptkiansantang.com" >> $GITHUB_STEP_SUMMARY
-          echo "- **Backend**: https://jargas.ptkiansantang.com/api/v1/health" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend**: https://jargas.ptkiansantang.com/health" >> $GITHUB_STEP_SUMMARY
           echo "- **Deployed at**: $(date)" >> $GITHUB_STEP_SUMMARY
 
