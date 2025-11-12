@@ -9,6 +9,7 @@ Dokumentasi lengkap untuk menyimpan dan mengelola kode proyek Jargas APBN di Git
 - [Setup Git di Local](#setup-git-di-local)
 - [Upload Kode ke GitHub](#upload-kode-ke-github)
 - [Update Kode ke GitHub](#update-kode-ke-github)
+- [Bekerja dengan Branch Dev](#bekerja-dengan-branch-dev)
 - [Struktur File yang Di-commit](#struktur-file-yang-di-commit)
 - [Troubleshooting](#troubleshooting)
 - [Best Practices](#best-practices)
@@ -235,6 +236,142 @@ git push
 
 ---
 
+## 🌿 Bekerja dengan Branch Dev
+
+Branch `dev` digunakan untuk development/testing sebelum merge ke branch `main` (production). Berikut cara bekerja dengan branch dev:
+
+### Langkah 1: Cek Branch Saat Ini
+
+```bash
+# Lihat branch yang sedang aktif
+git branch
+
+# Lihat semua branch (local dan remote)
+git branch -a
+```
+
+### Langkah 2: Buat atau Pindah ke Branch Dev
+
+**Jika branch dev belum ada di local:**
+
+```bash
+# Buat branch dev baru dari branch saat ini
+git checkout -b dev
+
+# Atau jika branch dev sudah ada di remote tapi belum di local
+git checkout -b dev origin/dev
+
+# Push branch dev ke GitHub (pertama kali)
+git push -u origin dev
+```
+
+**Jika branch dev sudah ada di local:**
+
+```bash
+# Pindah ke branch dev
+git checkout dev
+
+# Atau menggunakan perintah baru (Git 2.23+)
+git switch dev
+```
+
+### Langkah 3: Pull Perubahan Terbaru dari Branch Dev
+
+```bash
+# Pastikan sudah di branch dev
+git checkout dev
+
+# Pull perubahan terbaru dari GitHub
+git pull origin dev
+```
+
+**Catatan**: Selalu pull sebelum mulai bekerja untuk memastikan kode Anda up-to-date.
+
+### Langkah 4: Update Kode ke Branch Dev
+
+Setelah melakukan perubahan kode:
+
+```bash
+# 1. Cek perubahan
+git status
+
+# 2. Tambahkan perubahan
+git add .
+
+# 3. Commit dengan pesan deskriptif
+git commit -m "feat: Tambah fitur baru"
+
+# 4. Push ke branch dev
+git push origin dev
+```
+
+**Jika sudah set upstream sebelumnya:**
+```bash
+git push
+```
+
+### Langkah 5: Merge dari Main ke Dev (Sinkronisasi)
+
+Jika ada perubahan di branch `main` yang perlu di-merge ke `dev`:
+
+```bash
+# Pastikan sudah di branch dev
+git checkout dev
+
+# Pull perubahan terbaru dari dev
+git pull origin dev
+
+# Merge dari main ke dev
+git merge main
+
+# Resolve conflict jika ada, lalu:
+git add .
+git commit -m "merge: Sync dengan branch main"
+
+# Push ke branch dev
+git push origin dev
+```
+
+### Langkah 6: Merge dari Dev ke Main (Deploy ke Production)
+
+Setelah testing di branch dev selesai, merge ke main:
+
+```bash
+# Pindah ke branch main
+git checkout main
+
+# Pull perubahan terbaru
+git pull origin main
+
+# Merge dari dev ke main
+git merge dev
+
+# Push ke branch main
+git push origin main
+```
+
+**Atau menggunakan Pull Request di GitHub (Recommended):**
+1. Buka repository di GitHub
+2. Klik "Pull requests" → "New pull request"
+3. Pilih `dev` → `main`
+4. Review perubahan
+5. Klik "Create pull request" → "Merge pull request"
+
+### Workflow Branch
+
+```
+main (production) ←─── dev (development) ←─── feature/xxx
+     ↑                        ↑                      ↑
+   Stable              Testing/Development    Fitur Baru
+```
+
+**Penjelasan:**
+- **main**: Branch untuk production (kode yang sudah stabil)
+- **dev**: Branch untuk development dan testing
+- **feature/xxx**: Branch untuk fitur spesifik (opsional)
+
+---
+
 ## 📁 Struktur File yang Di-commit
 
 File dan folder yang **AKAN** di-upload ke GitHub:
@@ -298,6 +435,51 @@ git pull origin main --allow-unrelated-histories
 
 # Push lagi
 git push -u origin main
+```
+
+### Error: "branch 'dev' tidak ditemukan"
+
+**Solusi:**
+```bash
+# Buat branch dev baru
+git checkout -b dev
+
+# Atau fetch branch dari remote terlebih dahulu
+git fetch origin
+git checkout -b dev origin/dev
+```
+
+### Error: "Your branch is behind 'origin/dev'"
+
+**Solusi:**
+```bash
+# Pull perubahan terbaru dari branch dev
+git pull origin dev
+
+# Atau jika ada conflict, resolve dulu lalu:
+git add .
+git commit -m "merge: Resolve conflict"
+git push origin dev
+```
+
+### Error: "Cannot switch branch" karena ada perubahan yang belum di-commit
+
+**Solusi:**
+```bash
+# Opsi 1: Commit perubahan terlebih dahulu
+git add .
+git commit -m "WIP: Perubahan sementara"
+git checkout dev
+
+# Opsi 2: Stash perubahan (simpan sementara)
+git stash
+git checkout dev
+# Setelah selesai, kembalikan perubahan:
+git stash pop
+
+# Opsi 3: Discard perubahan (HATI-HATI: akan menghapus perubahan)
+git checkout .
+git checkout dev
 ```
 
 ### File .env Ter-commit
@@ -427,6 +609,38 @@ git pull origin main
 git push
 ```
 
+### 6. Gunakan Branch Dev untuk Development
+
+**Workflow yang disarankan:**
+- **main**: Hanya untuk kode yang sudah stabil dan siap production
+- **dev**: Untuk development dan testing
+- **feature/xxx**: Untuk fitur spesifik (opsional)
+
+```bash
+# Bekerja di branch dev
+git checkout dev
+git pull origin dev
+
+# ... lakukan perubahan ...
+
+git add .
+git commit -m "feat: Tambah fitur baru"
+git push origin dev
+
+# Setelah testing selesai, merge ke main
+git checkout main
+git pull origin main
+git merge dev
+git push origin main
+```
+
+### 7. Jangan Push Langsung ke Main
+
+Hindari push langsung ke branch main. Gunakan workflow:
+1. Push ke branch dev dulu
+2. Testing di branch dev
+3. Merge ke main via Pull Request atau merge manual
+
 ---
 
 ## 📚 Command Git yang Sering Digunakan
@@ -468,8 +682,37 @@ git reset --hard HEAD~1
 
 ### Clone Repository
 ```bash
-# Clone repository dari GitHub
+# Clone repository dari GitHub (default ke branch main)
 git clone https://github.com/username/jargas-apbn.git
+
+# Clone dan langsung switch ke branch dev
+git clone -b dev https://github.com/username/jargas-apbn.git
+
+# Atau clone dulu, lalu switch ke branch dev
+git clone https://github.com/username/jargas-apbn.git
+cd jargas-apbn
+git checkout dev
+```
+
+### Cek Branch Remote
+```bash
+# Lihat semua branch di remote
+git branch -r
+
+# Lihat semua branch (local dan remote)
+git branch -a
+```
+
+### Hapus Branch
+```bash
+# Hapus branch local
+git branch -d nama-branch
+
+# Hapus branch local (force, jika belum di-merge)
+git branch -D nama-branch
+
+# Hapus branch di remote
+git push origin --delete nama-branch
 ```
 
 ---
@@ -514,7 +757,8 @@ Jika mengalami masalah:
 - [ ] Git repository sudah diinisialisasi
 - [ ] File sudah di-commit
 - [ ] Remote sudah ditambahkan
-- [ ] Kode sudah di-push ke GitHub
+- [ ] Kode sudah di-push ke GitHub (branch main)
+- [ ] Branch dev sudah dibuat dan di-push
 - [ ] File `.gitignore` sudah benar
 - [ ] File `.env` tidak ter-commit
 
@@ -522,10 +766,33 @@ Jika mengalami masalah:
 
 **Selamat! Proyek Jargas APBN Anda sudah tersimpan di GitHub! 🎉**
 
-Untuk update selanjutnya, cukup jalankan:
+### Update ke Branch Main
 ```bash
 git add .
 git commit -m "Deskripsi perubahan"
-git push
+git push origin main
+```
+
+### Update ke Branch Dev
+```bash
+git checkout dev
+git add .
+git commit -m "Deskripsi perubahan"
+git push origin dev
+```
+
+### Quick Reference: Command untuk Branch Dev
+
+```bash
+# Switch ke branch dev
+git checkout dev
+
+# Pull perubahan terbaru
+git pull origin dev
+
+# Update dan push ke branch dev
+git add .
+git commit -m "feat: Deskripsi perubahan"
+git push origin dev
 ```
 
