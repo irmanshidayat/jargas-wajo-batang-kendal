@@ -41,7 +41,7 @@ Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.IPAddress -like "192.168
 
 ---
 
-## ⚙️ Menambahkan IP ke Konfigurasi.
+## ⚙️ Menambahkan IP ke Konfigurasi..
 
 Setelah mendapatkan IP laptop, ikuti langkah berikut:
 
