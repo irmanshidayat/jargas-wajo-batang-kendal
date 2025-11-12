@@ -5,18 +5,18 @@ import enum
 
 
 class ActionType(str, enum.Enum):
-    CREATE = "create"
-    UPDATE = "update"
-    DELETE = "delete"
-    VIEW = "view"
-    EXPORT = "export"
+    CREATE = "CREATE"
+    UPDATE = "UPDATE"
+    DELETE = "DELETE"
+    VIEW = "VIEW"
+    EXPORT = "EXPORT"
 
 
 class AuditLog(BaseModel):
     __tablename__ = "audit_logs"
 
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    action = Column(SQLEnum(ActionType), nullable=False, index=True)
+    action = Column(SQLEnum(ActionType, native_enum=False, length=20), nullable=False, index=True)
     table_name = Column(String(100), nullable=False, index=True)
     record_id = Column(Integer, nullable=True)
     old_values = Column(Text, nullable=True)  # JSON untuk nilai lama

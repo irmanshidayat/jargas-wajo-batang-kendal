@@ -8,7 +8,7 @@ class StockIn(BaseModel):
 
     nomor_invoice = Column(String(255), nullable=False, index=True)
     material_id = Column(Integer, ForeignKey("materials.id"), nullable=False, index=True)
-    quantity = Column(Numeric(10, 2), nullable=False)
+    quantity = Column(Numeric(10, 1), nullable=False)
     tanggal_masuk = Column(Date, nullable=False, index=True)
     evidence_paths = Column(Text, nullable=True)  # JSON array untuk multiple files
     surat_jalan_paths = Column(Text, nullable=True)  # JSON array untuk multiple files surat jalan

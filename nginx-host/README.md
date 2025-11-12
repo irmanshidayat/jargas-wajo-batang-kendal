@@ -1,5 +1,89 @@
 # Setup Nginx Host untuk Production
 
+## 🚀 SSH Scripts (1-6) - Setup Otomatis via SSH
+
+Untuk memudahkan setup nginx via SSH dari Windows, tersedia 6 script PowerShell yang dapat dijalankan secara berurutan:
+
+### Scripts yang Tersedia:
+
+1. **`ssh-1-upload-config.ps1`** - Upload config file ke server
+2. **`ssh-2-copy-to-nginx.ps1`** - Copy config ke `/etc/nginx/sites-available/`
+3. **`ssh-3-create-symlink.ps1`** - Buat symbolic link ke `sites-enabled`
+4. **`ssh-4-test-nginx.ps1`** - Test konfigurasi nginx
+5. **`ssh-5-reload-nginx.ps1`** - Reload nginx service
+6. **`ssh-6-verify.ps1`** - Verify setup nginx
+
+### Cara Menggunakan:
+
+**Opsi 1: Jalankan Semua Langkah Sekaligus (Recommended)**
+```powershell
+# Dari root project
+.\nginx-host\ssh-run-all.ps1
+
+# Dengan custom settings
+.\nginx-host\ssh-run-all.ps1 -ServerIP "192.168.1.100" -Username "admin" -ConfigFile "jargas-dev.conf" -NginxConfigName "jargas-dev" -Domain "devjargas.ptkiansantang.com"
+```
+
+**Opsi 2: Jalankan Satu per Satu**
+```powershell
+# Step 1: Upload config
+.\nginx-host\ssh-1-upload-config.ps1 -ServerIP "72.61.142.109" -Username "root" -ConfigFile "jargas-dev.conf"
+
+# Step 2: Copy ke nginx
+.\nginx-host\ssh-2-copy-to-nginx.ps1 -ServerIP "72.61.142.109" -Username "root" -ConfigFile "jargas-dev.conf" -NginxConfigName "jargas-dev"
+
+# Step 3: Create symlink
+.\nginx-host\ssh-3-create-symlink.ps1 -ServerIP "72.61.142.109" -Username "root" -NginxConfigName "jargas-dev"
+
+# Step 4: Test nginx
+.\nginx-host\ssh-4-test-nginx.ps1 -ServerIP "72.61.142.109" -Username "root"
+
+# Step 5: Reload nginx
+.\nginx-host\ssh-5-reload-nginx.ps1 -ServerIP "72.61.142.109" -Username "root"
+
+# Step 6: Verify
+.\nginx-host\ssh-6-verify.ps1 -ServerIP "72.61.142.109" -Username "root" -Domain "devjargas.ptkiansantang.com"
+```
+
+### Parameter Default:
+
+- `ServerIP`: `72.61.142.109`
+- `Username`: `root`
+- `ConfigFile`: `jargas-dev.conf` (untuk development) atau `jargas.conf` (untuk production)
+- `NginxConfigName`: `jargas-dev` (untuk development) atau `jargas` (untuk production)
+- `Domain`: `devjargas.ptkiansantang.com` (untuk development) atau `jargas.ptkiansantang.com` (untuk production)
+
+### Contoh untuk Production:
+
+```powershell
+.\nginx-host\ssh-run-all.ps1 `
+    -ServerIP "72.61.142.109" `
+    -Username "root" `
+    -ConfigFile "jargas.conf" `
+    -NginxConfigName "jargas" `
+    -Domain "jargas.ptkiansantang.com"
+```
+
+### Contoh untuk Development:
+
+```powershell
+.\nginx-host\ssh-run-all.ps1 `
+    -ServerIP "72.61.142.109" `
+    -Username "root" `
+    -ConfigFile "jargas-dev.conf" `
+    -NginxConfigName "jargas-dev" `
+    -Domain "devjargas.ptkiansantang.com"
+```
+
+### Prasyarat:
+
+- ✅ OpenSSH Client terinstall di Windows (Settings > Apps > Optional Features)
+- ✅ SSH key sudah di-setup atau password SSH sudah diketahui
+- ✅ File config (`jargas.conf` atau `jargas-dev.conf`) sudah ada di folder `nginx-host/`
+- ✅ Nginx sudah terinstall di server
+
+---
+
 ## Best Practice Architecture
 
 ```

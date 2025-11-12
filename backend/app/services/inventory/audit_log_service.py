@@ -26,9 +26,34 @@ class AuditLogService:
         """Create audit log entry"""
         import json
         
+        # Pastikan action adalah enum ActionType yang valid
+        if isinstance(action, str):
+            # Jika string, konversi ke enum dengan uppercase
+            action_upper = action.upper()
+            try:
+                action = ActionType[action_upper]
+            except KeyError:
+                # Jika tidak ditemukan, coba gunakan nilai langsung
+                try:
+                    action = ActionType(action_upper)
+                except ValueError:
+                    # Fallback ke CREATE jika tidak valid
+                    action = ActionType.CREATE
+        elif not isinstance(action, ActionType):
+            # Jika bukan enum, coba konversi
+            if hasattr(action, 'upper'):
+                try:
+                    action = ActionType[action.upper()]
+                except (KeyError, AttributeError):
+                    action = ActionType.CREATE
+            else:
+                action = ActionType.CREATE
+        
+        # Pastikan menggunakan enum ActionType yang valid (bukan string)
+        # SQLAlchemy akan otomatis mengkonversi enum ke nilai string yang benar saat menyimpan
         log_data = {
             "user_id": user_id,
-            "action": action,
+            "action": action,  # Pastikan ini adalah enum ActionType, bukan string
             "table_name": table_name,
             "record_id": record_id,
             "old_values": json.dumps(old_values, ensure_ascii=False, default=str) if old_values else None,

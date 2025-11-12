@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from sqlalchemy import and_, func
 from datetime import date
+from decimal import Decimal
 from app.models.inventory.return_model import Return
 from app.repositories.base import BaseRepository
 
@@ -64,7 +65,7 @@ class ReturnRepository(BaseRepository[Return]):
         except Exception:
             return []
 
-    def get_total_quantity_by_stock_out(self, stock_out_id: int) -> int:
+    def get_total_quantity_by_stock_out(self, stock_out_id: int) -> Decimal:
         """Get total quantity_kembali untuk stock_out_id tertentu (tidak termasuk yang deleted)"""
         try:
             from sqlalchemy import or_
@@ -74,11 +75,12 @@ class ReturnRepository(BaseRepository[Return]):
                     or_(self.model.is_deleted == 0, self.model.is_deleted.is_(None))
                 )
             ).scalar()
-            return result if result is not None else 0
+            # Konversi ke Decimal untuk konsistensi tipe data
+            return Decimal(str(result)) if result is not None else Decimal('0')
         except Exception:
-            return 0
+            return Decimal('0')
 
-    def get_total_reject_by_stock_out(self, stock_out_id: int) -> int:
+    def get_total_reject_by_stock_out(self, stock_out_id: int) -> Decimal:
         """Get total quantity_kondisi_reject untuk stock_out_id tertentu (tidak termasuk yang deleted)"""
         try:
             from sqlalchemy import or_
@@ -88,9 +90,10 @@ class ReturnRepository(BaseRepository[Return]):
                     or_(self.model.is_deleted == 0, self.model.is_deleted.is_(None))
                 )
             ).scalar()
-            return result if result is not None else 0
+            # Konversi ke Decimal untuk konsistensi tipe data
+            return Decimal(str(result)) if result is not None else Decimal('0')
         except Exception:
-            return 0
+            return Decimal('0')
 
     def get_by_stock_out(self, stock_out_id: int) -> List[Return]:
         """Get all returns by stock_out_id (tidak termasuk yang deleted)"""

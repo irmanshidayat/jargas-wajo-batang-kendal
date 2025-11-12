@@ -1,98 +1,127 @@
 # 🚀 Tutorial Deployment ke Server VPS - Jargas APBN
 
-docker-compose logs -f backend | grep -i migration
-
-Tutorial ringkas untuk deployment ke VPS.
+Tutorial ringkas untuk deployment ke VPS dengan 2 subdomain (Production & Development).
 
 ## 📋 Prasyarat
 
 - SSH access: `ssh root@72.61.142.109`
-- Project path: `~/jargas-wajo-batang-kendal`
 - Docker & Docker Compose terinstall
+- Git repository sudah setup
+
+---
+
+## 🌿 Overview: 2 Environment
+
+| Aspek | Production | Development |
+|-------|-----------|-------------|
+| **Branch** | `main` | `dev` |
+| **Domain** | `jargas.ptkiansantang.com` | `devjargas.ptkiansantang.com` |
+| **Path Server** | `~/jargas-wajo-batang-kendal` | `~/jargas-wajo-batang-kendal-dev` |
+| **Docker Compose** | `docker-compose.yml` | `docker-compose.dev.yml` |
+| **Environment** | `.env` | `.env.dev` |
+| **Database** | `jargas_apbn` | `jargas_apbn_dev` |
+| **Port** | 8080, 8001, 3308, 8081 | 8082, 8002, 3309, 8083 |
 
 ---
 
 ## 🚀 Deployment Cepat
 
-### Metode 1: Via GitHub (Recommended)
+### Via GitHub Actions (Recommended - Auto Deploy)
 
-**Lokal:**
+**Production:**
 ```powershell
-cd "C:\Irman\Coding Jargas APBN\Jargas APBN"
+git checkout main
 git add . && git commit -m "Update" && git push origin main
+# Auto-deploy via GitHub Actions → https://jargas.ptkiansantang.com
 ```
 
-**Server:**
+**Development:**
+```powershell
+git checkout dev
+git add . && git commit -m "Update" && git push origin dev
+# Auto-deploy via GitHub Actions → https://devjargas.ptkiansantang.com
+```
+
+test
+
+### Manual Deploy (Jika GitHub Actions Tidak Aktif)
+
+**Production:**
 ```bash
 ssh root@72.61.142.109
 cd ~/jargas-wajo-batang-kendal
 git pull origin main
-docker-compose build --no-cache && docker-compose up -d
+docker-compose --env-file .env build --no-cache && docker-compose --env-file .env up -d
 ```
 
-### Metode 2: Via SCP (Cepat)
-
-```powershell
-# Upload files
-scp -r .\backend\ root@72.61.142.109:~/jargas-wajo-batang-kendal/backend
-scp -r .\frontend\ root@72.61.142.109:~/jargas-wajo-batang-kendal/frontend
-
-# Rebuild di server
-ssh root@72.61.142.109 "cd ~/jargas-wajo-batang-kendal && docker-compose build --no-cache && docker-compose up -d"
+**Development:**
+```bash
+ssh root@72.61.142.109
+cd ~/jargas-wajo-batang-kendal-dev
+git pull origin dev
+docker-compose -f docker-compose.dev.yml --env-file .env.dev build --no-cache && docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d
 ```
 
-### Script Otomatis
+### Script PowerShell
 
 ```powershell
-# Dari Windows
-.\scripts\deploy-with-migration.ps1
+# Production
+.\scripts\active\deploy-production.ps1
+
+# Development
+.\scripts\active\deploy-dev.ps1
 ```
 
 ---
 
 ## 🔨 Rebuild Docker
 
+**Production:**
 ```bash
-# Di server
 cd ~/jargas-wajo-batang-kendal
-docker-compose build --no-cache
-docker-compose up -d
+docker-compose --env-file .env build --no-cache
+docker-compose --env-file .env up -d
+```
 
-# Rebuild service tertentu
-docker-compose build --no-cache backend
-docker-compose up -d backend
+**Development:**
+```bash
+cd ~/jargas-wajo-batang-kendal-dev
+docker-compose -f docker-compose.dev.yml --env-file .env.dev build --no-cache
+docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d
 ```
 
 **Catatan:** Migration otomatis berjalan saat backend start (`AUTO_MIGRATE=True`).
-
-### Fitur Auto-Migration
-
-- ✅ **Deteksi database kosong** - Auto force migration untuk initial setup
-- ✅ **Retry logic** - Otomatis retry 3x (delay 5 detik) jika error koneksi
-- ✅ **Smart error handling** - Deteksi error dan retry otomatis
 
 ---
 
 ## ✅ Verifikasi
 
+**Cek Container:**
 ```bash
-# Status container
-docker-compose ps
+# Production
+docker-compose --env-file .env ps
 
-# Log migration
-docker-compose logs backend | grep -i migration
-
-# Cek tabel database
-docker-compose exec mysql mysql -u root -padmin123 jargas_apbn -e "SHOW TABLES;"
-
-# Health check
-curl http://localhost/health
+# Development
+docker-compose -f docker-compose.dev.yml --env-file .env.dev ps
 ```
 
-**Akses:**
-- Frontend: `https://jargas.ptkiansantang.com` (HTTPS) atau `http://72.61.142.109:8080` (HTTP)
-- Backend: `https://jargas.ptkiansantang.com/api/v1/health` (HTTPS)
-- Adminer: `http://72.61.142.109:8081` (HTTP, internal)
+**Health Check:**
+```bash
+# Production
+curl https://jargas.ptkiansantang.com/api/v1/health
+
+# Development
+curl https://devjargas.ptkiansantang.com/api/v1/health
+```
+
+**Log Migration:**
+```bash
+# Production
+docker-compose --env-file .env logs backend | grep -i migration
+
+# Development
+docker-compose -f docker-compose.dev.yml --env-file .env.dev logs backend | grep -i migration
+```
 
 ---
 
@@ -107,360 +136,222 @@ docker-compose restart
 ### Build gagal
 ```bash
 docker-compose build --no-cache 2>&1 | tee build.log
-docker system prune -a  # Clean up
+docker system prune -a
 ```
 
-### Database migration tidak jalan
-
-**Auto-migrate sudah aktif** dengan fitur:
-- Auto-detect database kosong → Force migration
-- Retry 3x jika error koneksi
-
-**Cek log:**
+### Migration tidak jalan
 ```bash
+# Cek log
 docker-compose logs backend | grep -i migration
-docker-compose logs backend --tail 100
-```
 
-**Manual migration (jika perlu):**
-```bash
+# Manual migration
 docker-compose exec backend alembic upgrade head
-# Atau dari Windows
-.\scripts\run-migration-server.ps1
-```
-
-**Verifikasi:**
-```bash
-docker-compose exec backend alembic current
-docker-compose exec mysql mysql -u root -padmin123 jargas_apbn -e "SHOW TABLES;"
 ```
 
 ---
 
-## 🌐 Setup Domain (Opsional)
+## 🤖 GitHub Actions Setup
 
-### 1. DNS Record
-Tambahkan A Record di panel DNS:
-```
-Type: A
-Name: jargas
-Value: 72.61.142.109
+### Setup Awal (Hanya Sekali)
+
+1. **Generate SSH Key:**
+```bash
+ssh-keygen -t ed25519 -C "github-actions" -f ~/.ssh/github_actions
 ```
 
-### 2. Setup di Server
+2. **Copy Public Key ke Server:**
+
+**Opsi 1: Menggunakan Script PowerShell (Recommended):**
 ```powershell
-# Dari Windows
-.\nginx-host\setup-domain.ps1
+.\scripts\active\setup-github-actions-ssh.ps1
 ```
 
-Atau di server:
+**Opsi 2: Manual dengan ssh-copy-id:**
 ```bash
-bash nginx-host/setup-domain.sh
+ssh-copy-id -i ~/.ssh/github_actions.pub root@72.61.142.109
 ```
 
-### 3. Setup SSL/HTTPS (Let's Encrypt)
-
-**Prasyarat:**
-- Domain sudah pointing ke server (DNS A record)
-- Domain bisa diakses via HTTP
-- Port 80 dan 443 terbuka di firewall
-- Nginx host sudah terinstall dan running
-
-**Proses Setup:**
-
-1. **Install Certbot:**
-```bash
-sudo apt update
-sudo apt install certbot python3-certbot-nginx -y
+**Opsi 3: Manual copy via SSH dengan password:**
+```powershell
+# Di Windows PowerShell (akan minta password sekali)
+$publicKey = Get-Content "$env:USERPROFILE\.ssh\github_actions.pub" -Raw
+echo $publicKey.Trim() | ssh root@72.61.142.109 "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
 ```
 
-2. **Generate SSL Certificate:**
+**Opsi 4: Copy manual (jika semua opsi di atas gagal):**
+1. Buka file: `$env:USERPROFILE\.ssh\github_actions.pub`
+2. Copy seluruh isinya (contoh: `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC1EpYbTekG20g8y8Vo6wjLyy3AgCAEKdVYfoXKL3zb4 github-actions`)
+3. SSH ke server: `ssh root@72.61.142.109`
+4. Jalankan perintah di server:
+   ```bash
+   mkdir -p ~/.ssh
+   chmod 700 ~/.ssh
+   echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC1EpYbTekG20g8y8Vo6wjLyy3AgCAEKdVYfoXKL3zb4 github-actions" >> ~/.ssh/authorized_keys
+   chmod 600 ~/.ssh/authorized_keys
+   ```
+   (Ganti dengan public key Anda yang sebenarnya)
+
+**Verifikasi:**
 ```bash
-sudo certbot --nginx -d jargas.ptkiansantang.com
+ssh root@72.61.142.109 "cat ~/.ssh/authorized_keys | grep github-actions"
 ```
 
-Certbot akan:
-- Generate certificate otomatis
-- Update nginx config untuk HTTPS
-- Setup auto-renewal
+3. **Tambah Private Key ke GitHub Secrets:**
+   - Buka repository di GitHub
+   - Klik **Settings** → **Secrets and variables** → **Actions**
+   - Klik **New repository secret**
+   - **Name**: `SSH_PRIVATE_KEY` (harus sama persis, case-sensitive)
+   - **Value**: Copy seluruh isi dari file `~/.ssh/github_actions` (termasuk `-----BEGIN OPENSSH PRIVATE KEY-----` dan `-----END OPENSSH PRIVATE KEY-----`)
+   - Klik **Add secret**
+   ..
+   **Cara copy private key di Windows PowerShell:**
+   ```powershell
+   Get-Content "$env:USERPROFILE\.ssh\github_actions" | Set-Clipboard
+   ```
+   Lalu paste ke GitHub Secret value.
 
-3. **Verifikasi SSL:**
-```bash
-# Test auto-renewal
-sudo certbot renew --dry-run
+### Cara Kerja
 
-# Cek status certificate
-sudo certbot certificates
+- **Push ke `main`** → Auto-deploy Production
+- **Push ke `dev`** → Auto-deploy Development
+- **Manual trigger:** GitHub → Actions → Run workflow
+
+### Monitoring
+
+- Repository → Actions → Lihat workflow run
+- Cek log step-by-step
+- Verifikasi deployment summary
+
+### Troubleshooting GitHub Actions
+
+**Error: "The ssh-private-key argument is empty"**
+- ❌ **Penyebab**: GitHub Secret `SSH_PRIVATE_KEY` belum dikonfigurasi atau nama secret salah
+- ✅ **Solusi**:
+  1. Buka GitHub Repository → Settings → Secrets and variables → Actions
+  2. Pastikan ada secret dengan nama **`SSH_PRIVATE_KEY`** (case-sensitive, tanpa spasi)
+  3. Jika belum ada, tambahkan dengan cara di atas
+  4. Jika sudah ada, cek apakah value-nya benar (harus termasuk BEGIN dan END lines)
+  5. Setelah update secret, jalankan ulang workflow: Actions → Deploy Development → Run workflow
+
+**Error: "Process completed with exit code 255"**
+- ❌ **Penyebab**: SSH connection gagal, biasanya karena public key belum di-copy ke server
+- ✅ **Solusi**:
+  1. Jalankan script setup SSH: `.\scripts\active\setup-github-actions-ssh.ps1`
+  2. Atau manual copy public key ke server:
+     ```powershell
+     # Di Windows PowerShell
+     Get-Content "$env:USERPROFILE\.ssh\github_actions.pub" | ssh root@72.61.142.109 "cat >> ~/.ssh/authorized_keys"
+     ```
+  3. Verifikasi public key sudah ada di server:
+     ```bash
+     ssh root@72.61.142.109 "cat ~/.ssh/authorized_keys | grep github-actions"
+     ```
+  4. Test SSH connection:
+     ```powershell
+     ssh -i "$env:USERPROFILE\.ssh\github_actions" root@72.61.142.109 "echo 'SSH OK'"
+     ```
+
+**Error: "Permission denied"**
+- Verifikasi SSH key sudah di-copy ke server dengan: `ssh-copy-id -i ~/.ssh/github_actions.pub root@72.61.142.109`
+- Atau gunakan script: `.\scripts\active\setup-github-actions-ssh.ps1`
+- Cek GitHub Secret `SSH_PRIVATE_KEY` sudah benar
+- Test SSH connection: `ssh -i ~/.ssh/github_actions root@72.61.142.109`
+
+**Error: "Process completed with exit code 1"**
+- ❌ **Penyebab**: Ada command yang gagal dalam proses deployment
+- ✅ **Solusi**:
+  1. Cek log detail di GitHub Actions untuk melihat step mana yang gagal
+  2. Kemungkinan penyebab:
+     - **Project path tidak ada**: Pastikan folder `~/jargas-wajo-batang-kendal-dev` sudah dibuat di server
+     - **Git branch tidak ada**: Pastikan branch `dev` sudah di-push ke remote
+     - **File .env.dev tidak ada**: Pastikan file `.env.dev` dan `backend/.env.dev` ada di server
+     - **Docker build gagal**: Cek log Docker untuk error detail
+     - **Docker-compose gagal**: Cek apakah Docker dan Docker Compose sudah terinstall di server
+  3. Verifikasi manual di server:
+     ```bash
+     ssh root@72.61.142.109
+     cd ~/jargas-wajo-batang-kendal-dev
+     ls -la .env.dev backend/.env.dev
+     docker-compose -f docker-compose.dev.yml --env-file .env.dev ps
+     ```
+
+**Error: ".env files not found"**
+- Pastikan file `.env.dev` dan `backend/.env.dev` ada di server di path `~/jargas-wajo-batang-kendal-dev`
+- Jika belum ada, copy dari local atau buat manual di server
+- Verifikasi dengan: `ssh root@72.61.142.109 "ls -la ~/jargas-wajo-batang-kendal-dev/.env.dev"`
+
+**Error: "Health check failed"**
+- Tunggu lebih lama (migration mungkin masih berjalan, bisa sampai 2-3 menit)
+- Cek container logs: `docker-compose -f docker-compose.dev.yml --env-file .env.dev logs backend`
+- Pastikan backend container sudah running: `docker-compose -f docker-compose.dev.yml --env-file .env.dev ps`
+
+---
+
+## 📝 Workflow Git
+
+### Update ke Dev (Development)
+
+```powershell
+git checkout dev
+git pull origin dev
+git add .
+git commit -m "feat: Deskripsi perubahan"
+git push origin dev  # Auto-deploy ke devjargas.ptkiansantang.com
 ```
 
-4. **Update Nginx Config (jika perlu):**
-Setelah SSL terpasang, uncomment bagian HTTPS di `/etc/nginx/sites-available/jargas`:
-```bash
-sudo nano /etc/nginx/sites-available/jargas
-# Uncomment bagian HTTPS (baris 114-184)
-# Uncomment redirect HTTP → HTTPS (baris 22-30)
-sudo nginx -t
-sudo systemctl reload nginx
+### Update ke Main (Production)
+
+**⚠️ PENTING: Selalu test di dev terlebih dahulu!**
+
+```powershell
+git checkout main
+git pull origin main
+git merge dev
+git push origin main  # Auto-deploy ke jargas.ptkiansantang.com
 ```
 
-**Hasil:**
-- ✅ Domain bisa diakses via HTTPS: `https://jargas.ptkiansantang.com`
-- ✅ HTTP otomatis redirect ke HTTPS
-- ✅ Certificate auto-renewal setiap 90 hari
+### Workflow Lengkap
 
-**Troubleshooting:**
-```bash
-# Cek nginx config
-sudo nginx -t
+```powershell
+# 1. Develop di dev
+git checkout dev
+git pull origin dev
+# ... edit code ...
+git add . && git commit -m "feat: Fitur baru" && git push origin dev
 
-# Cek certificate
-sudo certbot certificates
+# 2. Test di devjargas.ptkiansantang.com
 
-# Manual renew (jika perlu)
-sudo certbot renew
-
-# Cek log
-sudo tail -f /var/log/nginx/jargas_error.log
+# 3. Merge ke main untuk production
+git checkout main
+git pull origin main
+git merge dev
+git push origin main
 ```
 
 ---
 
 ## 💡 Best Practices
 
-1. **Backup sebelum update:**
+1. **Selalu test di dev sebelum merge ke main**
+2. **Monitor deployment logs di GitHub Actions**
+3. **Backup database sebelum deploy production:**
    ```bash
    docker-compose exec mysql mysqldump -u root -padmin123 jargas_apbn > backup_$(date +%Y%m%d).sql
    ```
-
-2. **Monitor setelah deployment:**
-   ```bash
-   docker-compose logs -f
-   docker stats
-   ```
-
-3. **Gunakan Git untuk production** - Selalu commit & push sebelum deploy
+4. **Gunakan commit message yang jelas:** `feat:`, `fix:`, `refactor:`
+5. **Jangan push langsung ke main** - selalu lewat dev dulu
 
 ---
 
-## 📝 Checklist
+## 📝 Checklist Deployment
 
 - [ ] Kode sudah di-test di lokal
-- [ ] Git commit & push (jika pakai Git)
-- [ ] Container sudah di-rebuild
+- [ ] Git commit & push ke branch yang benar (`dev` atau `main`)
+- [ ] Cek GitHub Actions untuk deployment status
 - [ ] Health check berhasil
 - [ ] Migration berjalan (cek log)
-- [ ] Domain sudah setup (DNS A record)
-- [ ] Nginx host sudah dikonfigurasi
-- [ ] SSL/HTTPS sudah terpasang (jika production)
+- [ ] Verifikasi aplikasi bisa diakses
 
 ---
 
-## 🔄 Auto-Migration Features
-
-### Fitur Utama
-
-1. **Auto-Detection Database Kosong**
-   - Deteksi otomatis jika database kosong
-   - Force migration meskipun `AUTO_MIGRATE_ONLY_IF_PENDING=True`
-   - Tidak perlu manual migration untuk initial setup
-
-2. **Retry Logic**
-   - Retry 3x dengan delay 5 detik
-   - Deteksi error: `connection`, `timeout`, `refused`, `unreachable`
-   - Aplikasi tetap berjalan meskipun migration gagal
-
-3. **Logging Detail**
-   - `🔍 Database kosong terdeteksi` → Initial migration
-   - `⚠️ Database belum ready (attempt 1/3)` → Retry
-   - `✅ Initial migration berhasil` → Success
-
-### Cara Kerja
-
-```
-Startup → Cek AUTO_MIGRATE
-→ Cek database kosong
-→ Jika kosong → Force migration
-→ Jika error koneksi → Retry 3x (delay 5 detik)
-→ Log semua proses
-```
-
-### Konfigurasi
-
-```yaml
-# docker-compose.yml
-AUTO_MIGRATE: ${AUTO_MIGRATE:-True}
-AUTO_MIGRATE_ONLY_IF_PENDING: ${AUTO_MIGRATE_ONLY_IF_PENDING:-True}
-MIGRATION_MODE: sequential
-```
-
-**Catatan:** Semua fitur sudah terintegrasi, tidak perlu setup manual.
-
----
-
-## 🌿 Branch Strategy & Multi-Environment Deployment
-
-### Overview
-
-Project ini menggunakan 2 branch utama:
-- **`main`** → Production → `https://jargas.ptkiansantang.com/`
-- **`dev`** → Development → `https://devjargas.ptkiansantang.com/`
-
-### Struktur Folder di Server
-
-```
-~/jargas-wajo-batang-kendal/          # Production
-  ├── docker-compose.yml
-  └── ...
-
-~/jargas-wajo-batang-kendal-dev/      # Development
-  ├── docker-compose.dev.yml
-  └── ...
-```
-
-### Port Configuration
-
-**Production:**
-- Frontend: `8080`
-- Backend: `8001`
-- MySQL: `3308`
-- Adminer: `8081`
-
-**Development:**
-- Frontend: `8082`
-- Backend: `8002`
-- MySQL: `3309`
-- Adminer: `8083`
-
-### Database
-
-- **Production**: `jargas_apbn`
-- **Development**: `jargas_apbn_dev` (terpisah)
-
-### Deployment Production
-
-**Lokal:**
-```powershell
-git checkout main
-git add .
-git commit -m "Update production"
-git push origin main
-```
-
-**Server (Otomatis via GitHub Actions):**
-- Auto-deploy saat push ke `main`
-- Atau manual: `ssh root@72.61.142.109 'cd ~/jargas-wajo-batang-kendal && git pull origin main && docker-compose build --no-cache && docker-compose up -d'`
-
-**Script Manual:**
-```powershell
-# Dari Windows
-.\scripts\deploy-with-migration.ps1
-```
-
-### Deployment Development
-
-**Lokal:**
-```powershell
-git checkout dev
-git add .
-git commit -m "Update development"
-git push origin dev
-```
-
-**Server (Otomatis via GitHub Actions):**
-- Auto-deploy saat push ke `dev`
-- Atau manual: `ssh root@72.61.142.109 'cd ~/jargas-wajo-batang-kendal-dev && git pull origin dev && docker-compose -f docker-compose.dev.yml build --no-cache && docker-compose -f docker-compose.dev.yml up -d'`
-
-**Script Manual:**
-```powershell
-# Dari Windows
-.\scripts\deploy-dev.ps1
-```
-
-### Setup Awal Development Environment
-
-1. **Clone repository ke folder dev:**
-```bash
-ssh root@72.61.142.109
-cd ~
-git clone <repository-url> jargas-wajo-batang-kendal-dev
-cd jargas-wajo-batang-kendal-dev
-git checkout dev
-```
-
-2. **Setup domain:**
-```powershell
-# Dari Windows
-.\scripts\setup-dev-domain.ps1
-```
-
-3. **Setup SSL:**
-```bash
-# Di server
-sudo certbot --nginx -d devjargas.ptkiansantang.com
-```
-
-4. **Deploy pertama kali:**
-```powershell
-# Dari Windows
-.\scripts\deploy-dev.ps1
-```
-
-### GitHub Actions Setup
-
-1. **Buat SSH Key Pair:**
-```bash
-ssh-keygen -t ed25519 -C "github-actions" -f ~/.ssh/github_actions
-```
-
-2. **Copy public key ke server:**
-```bash
-ssh-copy-id -i ~/.ssh/github_actions.pub root@72.61.142.109
-```
-
-3. **Tambah SSH Private Key ke GitHub Secrets:**
-   - GitHub Repository → Settings → Secrets and variables → Actions
-   - New repository secret
-   - Name: `SSH_PRIVATE_KEY`
-   - Value: Isi dari `~/.ssh/github_actions` (private key)
-
-4. **Test Deployment:**
-   - Push ke branch `main` → Auto-deploy production
-   - Push ke branch `dev` → Auto-deploy development
-
-### Best Practices
-
-1. **Selalu test di dev sebelum merge ke main**
-2. **Gunakan commit message yang jelas**
-3. **Monitor deployment logs di GitHub Actions**
-4. **Backup database sebelum deploy production**
-5. **Gunakan feature branch untuk fitur besar**
-
-### Workflow Development
-
-```bash
-# 1. Buat feature branch dari dev
-git checkout dev
-git pull origin dev
-git checkout -b feature/nama-fitur
-
-# 2. Develop dan commit
-git add .
-git commit -m "feat: Tambah fitur baru"
-
-# 3. Push ke feature branch
-git push origin feature/nama-fitur
-
-# 4. Test di development server (setelah merge ke dev)
-git checkout dev
-git merge feature/nama-fitur
-git push origin dev  # Auto-deploy ke devjargas.ptkiansantang.com
-
-# 5. Setelah testing, merge ke main untuk production
-git checkout main
-git merge dev
-git push origin main  # Auto-deploy ke jargas.ptkiansantang.com
-```
-
----
-
-**Terakhir diupdate:** 2025-01-27 (ditambahkan: Multi-Environment Deployment)
+**Terakhir diupdate:** 2025-01-27

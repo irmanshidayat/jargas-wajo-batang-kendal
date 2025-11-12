@@ -17,7 +17,7 @@ Dokumentasi singkat untuk menghapus semua data dari database `jargas_apbn` di se
 
 ```powershell
 cd "C:\Irman\Coding Jargas APBN\Jargas APBN"
-.\scripts\clear-database-vps.ps1
+.\scripts\active\clear-database-vps.ps1
 ```
 
 **Langkah-langkah:**

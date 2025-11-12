@@ -106,6 +106,7 @@ export const API_ENDPOINTS = {
     INSTALLED: {
       GET_ALL: '/inventory/installed',
       GET_BY_ID: (id: number) => `/inventory/installed/${id}`,
+      GET_BY_STOCK_OUT: (stockOutId: number) => `/inventory/installed/by-stock-out/${stockOutId}`,
       CREATE: '/inventory/installed',
     },
     // Inventory - Returns

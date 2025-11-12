@@ -12,7 +12,7 @@ class StockOut(BaseModel):
     nomor_barang_keluar = Column(String(255), unique=True, nullable=False, index=True)  # JRGS-KDL-YYYYMMDD-XXXX
     mandor_id = Column(Integer, ForeignKey("mandors.id"), nullable=False, index=True)
     material_id = Column(Integer, ForeignKey("materials.id"), nullable=False, index=True)
-    quantity = Column(Numeric(10, 2), nullable=False)
+    quantity = Column(Numeric(10, 1), nullable=False)
     tanggal_keluar = Column(Date, nullable=False, index=True)
     evidence_paths = Column(Text, nullable=True)  # JSON array untuk multiple files
     surat_permohonan_paths = Column(Text, nullable=True)  # JSON array untuk multiple files surat permohonan dari mandor

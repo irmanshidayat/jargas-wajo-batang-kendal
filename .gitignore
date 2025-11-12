@@ -3,6 +3,16 @@
 .env.local
 .env.*
 !.env.example
+!.env.dev.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+!backend/.env.dev.example
+
+# Allow env.example files (without dot) to be committed
+# These files are templates and should be in repository
+!env.example
+!env.dev.example
 
 # Virtual Environment (Python)
 venv/

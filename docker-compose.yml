@@ -32,17 +32,44 @@ services:
     container_name: jargas_backend
     restart: unless-stopped
     environment:
-      DOCKER_CONTAINER: "true"  # Tambahkan ini untuk deteksi Docker
+      # Docker Detection
+      DOCKER_CONTAINER: "true"
+      
+      # Database Configuration
       DB_HOST: mysql
       DB_PORT: 3306
       DB_USER: root
-      DB_PASSWORD: "admin123"
+      DB_PASSWORD: ${DB_PASSWORD:-admin123}
       DB_NAME: ${DB_NAME}
+      
+      # Application Configuration
+      APP_NAME: ${APP_NAME:-Jargas APBN API}
+      APP_VERSION: ${APP_VERSION:-1.0.0}
       SECRET_KEY: ${SECRET_KEY}
       DEBUG: ${DEBUG:-False}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      
+      # Server Configuration
+      HOST: 0.0.0.0
+      PORT: 8000
+      
+      # CORS Configuration
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      
+      # File Upload Configuration
+      UPLOAD_DIR: ${UPLOAD_DIR:-uploads/evidence}
+      MAX_FILE_SIZE: ${MAX_FILE_SIZE:-5242880}
+      ALLOWED_FILE_TYPES: ${ALLOWED_FILE_TYPES:-image/jpeg,image/jpg,image/png,application/pdf}
+      
+      # Migration Configuration
       AUTO_MIGRATE: ${AUTO_MIGRATE:-True}
       AUTO_MIGRATE_ONLY_IF_PENDING: ${AUTO_MIGRATE_ONLY_IF_PENDING:-True}
+      MIGRATION_MODE: ${MIGRATION_MODE:-sequential}
+      MIGRATION_VALIDATE_BEFORE_UPGRADE: ${MIGRATION_VALIDATE_BEFORE_UPGRADE:-True}
+      MIGRATION_STOP_ON_ERROR: ${MIGRATION_STOP_ON_ERROR:-True}
+      
+      # Timezone
       TZ: Asia/Jakarta
     ports:
       - "${BACKEND_PORT_MAPPED:-8001}:8000"

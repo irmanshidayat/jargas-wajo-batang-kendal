@@ -124,17 +124,61 @@ export default function ReturnsListPage() {
     if (!tanggal || !tanggal.tanggal) return
 
     try {
-      Swal.showLoading()
-      await inventoryService.releaseReturn(ret.id, tanggal.tanggal, [])
-      await Swal.fire({ icon: 'success', title: 'Berhasil', text: 'Return berhasil dikeluarkan kembali' })
+      Swal.fire({
+        title: 'Memproses...',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: () => Swal.showLoading(),
+      })
+      
+      const response = await inventoryService.releaseReturn(ret.id, tanggal.tanggal, [])
+      
+      // Close loading
+      Swal.close()
+      
+      // Show success notification
+      await Swal.fire({ 
+        icon: 'success', 
+        title: 'Berhasil', 
+        text: 'Return berhasil dikeluarkan kembali' 
+      })
+      
+      // Reload returns list
       loadReturns()
     } catch (e: any) {
+      // Close loading first
+      Swal.close()
+      
       // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
       if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED' || e?.message === 'canceled') {
         return
       }
       
-      Swal.fire({ icon: 'error', title: 'Error', text: e.response?.data?.detail || 'Gagal mengeluarkan kembali' })
+      // Check if this is actually a success response that was misinterpreted
+      // Sometimes axios might throw error even on success if response structure is unexpected
+      if (e?.response?.status >= 200 && e?.response?.status < 300) {
+        // This is actually a success, just reload the data
+        await Swal.fire({ 
+          icon: 'success', 
+          title: 'Berhasil', 
+          text: 'Return berhasil dikeluarkan kembali' 
+        })
+        loadReturns()
+        return
+      }
+      
+      // Real error - show error notification
+      const errorMessage = e?.response?.data?.detail || 
+                          e?.response?.data?.message || 
+                          e?.message || 
+                          'Gagal mengeluarkan kembali'
+      
+      Swal.fire({ 
+        icon: 'error', 
+        title: 'Error', 
+        text: errorMessage 
+      })
     }
   }
 

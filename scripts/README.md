@@ -2,10 +2,103 @@
 
 Folder ini berisi script-script utilitas untuk memudahkan operasi Docker dan deployment.
 
-## 📋 Daftar Scripts
+## 📁 Struktur Folder
 
-### `push-to-ghcr.ps1`
+```
+scripts/
+├── active/          # Script yang masih aktif digunakan (rutin)
+├── setup/           # Script setup one-time (untuk referensi setup server baru)
+└── archive/         # Script one-time fix yang sudah tidak diperlukan (referensi historis)
+```
 
+---
+
+## 🚀 Script Aktif (Folder `active/`)
+
+Script yang masih digunakan secara rutin untuk operasi sehari-hari.
+
+### Deployment & Git
+
+#### `deploy-production.ps1`
+Script PowerShell untuk deployment **PRODUCTION** lengkap dengan auto-migration ke server VPS.
+
+**Fitur:**
+- Verifikasi file `.env` production
+- Pull kode terbaru dari Git (branch main)
+- Rebuild Docker containers dengan `--env-file .env`
+- Start containers (migration otomatis berjalan)
+- Verifikasi migration dan tabel database
+- Health check endpoint
+
+**Cara Menggunakan:**
+```powershell
+# Dengan default settings (72.61.142.109, root, ~/jargas-wajo-batang-kendal)
+.\scripts\active\deploy-production.ps1
+
+# Dengan custom settings
+.\scripts\active\deploy-production.ps1 -ServerIP "192.168.1.100" -Username "admin" -ProjectPath "~/my-project"
+```
+
+**Parameter:**
+- `-ServerIP` (Optional): IP atau domain server (default: "72.61.142.109")
+- `-Username` (Optional): Username SSH (default: "root")
+- `-ProjectPath` (Optional): Path project di server (default: "~/jargas-wajo-batang-kendal")
+
+**Catatan:**
+- Script ini menggunakan `docker-compose --env-file .env` untuk production
+- Pastikan file `.env` dan `backend/.env` sudah dibuat (gunakan `scripts/setup/setup-env-production.ps1`)
+
+---
+
+#### `deploy-with-migration.ps1` (Legacy)
+Script PowerShell untuk deployment production (legacy, gunakan `deploy-production.ps1`).
+
+**Catatan:** Script ini sudah di-update untuk menggunakan `--env-file .env`, tapi disarankan menggunakan `deploy-production.ps1` yang lebih lengkap.
+
+---
+
+#### `deploy-dev.ps1`
+Script PowerShell untuk deployment **DEVELOPMENT** dengan auto-migration.
+
+**Fitur:**
+- Verifikasi file `.env.dev` development
+- Pull kode terbaru dari Git (branch dev)
+- Rebuild Docker containers dengan `docker-compose.dev.yml --env-file .env.dev`
+- Start containers (migration otomatis berjalan)
+- Verifikasi migration dan tabel database
+- Health check endpoint
+
+**Cara Menggunakan:**
+```powershell
+# Dengan default settings (72.61.142.109, root, ~/jargas-wajo-batang-kendal-dev)
+.\scripts\active\deploy-dev.ps1
+
+# Dengan custom settings
+.\scripts\active\deploy-dev.ps1 -ServerIP "192.168.1.100" -Username "admin" -ProjectPath "~/my-project-dev"
+```
+
+**Parameter:**
+- `-ServerIP` (Optional): IP atau domain server (default: "72.61.142.109")
+- `-Username` (Optional): Username SSH (default: "root")
+- `-ProjectPath` (Optional): Path project di server (default: "~/jargas-wajo-batang-kendal-dev")
+
+**Catatan:**
+- Script ini menggunakan `docker-compose -f docker-compose.dev.yml --env-file .env.dev` untuk development
+- Pastikan file `.env.dev` dan `backend/.env.dev` sudah dibuat (gunakan `scripts/setup/setup-env-development.ps1`)
+
+---
+
+#### `push-to-dev.ps1`
+Script untuk push perubahan ke branch dev.
+
+**Cara Menggunakan:**
+```powershell
+.\scripts\active\push-to-dev.ps1 -Message "Update development"
+```
+
+---
+
+#### `push-to-ghcr.ps1`
 Script PowerShell untuk build dan push Docker images ke GitHub Container Registry (GHCR).
 
 **Syarat:**
@@ -14,10 +107,8 @@ Script PowerShell untuk build dan push Docker images ke GitHub Container Registr
 - PowerShell (Windows)
 
 **Cara Menggunakan:**
-
 ```powershell
-# Dari root project
-.\scripts\push-to-ghcr.ps1 -GitHubUsername "your-username" -GitHubToken "ghp_your_token" -Version "v1.0.0"
+.\scripts\active\push-to-ghcr.ps1 -GitHubUsername "your-username" -GitHubToken "ghp_your_token" -Version "v1.0.0"
 ```
 
 **Parameter:**
@@ -27,182 +118,139 @@ Script PowerShell untuk build dan push Docker images ke GitHub Container Registr
 - `-SkipBuild` (Optional): Skip build, hanya push images yang sudah ada
 - `-BuildOnly` (Optional): Hanya build, tidak push ke GHCR
 
-**Contoh:**
-
-```powershell
-# Build dan push dengan version v1.0.0
-.\scripts\push-to-ghcr.ps1 -GitHubUsername "johndoe" -GitHubToken "ghp_xxxxxxxxxxxx" -Version "v1.0.0"
-
-# Build dan push dengan latest
-.\scripts\push-to-ghcr.ps1 -GitHubUsername "johndoe" -GitHubToken "ghp_xxxxxxxxxxxx"
-
-# Hanya build, tidak push
-.\scripts\push-to-ghcr.ps1 -GitHubUsername "johndoe" -GitHubToken "ghp_xxxxxxxxxxxx" -BuildOnly
-
-# Skip build, hanya push images yang sudah ada
-.\scripts\push-to-ghcr.ps1 -GitHubUsername "johndoe" -GitHubToken "ghp_xxxxxxxxxxxx" -SkipBuild
-```
-
-**Keamanan:**
-- Jangan commit token ke repository
-- Simpan token di environment variable atau file terpisah
-- Gunakan GitHub Secrets untuk otomatisasi
-
-**Contoh dengan Environment Variable:**
-
-```powershell
-# Set environment variable
-$env:GITHUB_TOKEN = "ghp_your_token"
-$env:GITHUB_USERNAME = "your-username"
-
-# Gunakan dalam script
-.\scripts\push-to-ghcr.ps1 -GitHubUsername $env:GITHUB_USERNAME -GitHubToken $env:GITHUB_TOKEN -Version "v1.0.0"
-```
-
 ---
 
-### `deploy-with-migration.ps1`
+### Monitoring & Debugging
 
-Script PowerShell untuk deployment lengkap dengan auto-migration ke server VPS.
+#### `check-container-status-server.ps1`
+Script untuk cek status container di server.
+
+**Cara Menggunakan:**
+```powershell
+.\scripts\active\check-container-status-server.ps1
+```
 
 **Fitur:**
-- Pull kode terbaru dari Git
-- Rebuild Docker containers
-- Start containers (migration otomatis berjalan)
-- Verifikasi migration dan tabel database
-- Health check endpoint
+- Menampilkan status semua container
+- Cek restart count
+- Cek health status
+- Menampilkan log terakhir
 
-**Syarat:**
-- SSH access ke server
-- OpenSSH Client terinstall di Windows
-- Project sudah ada di server
+---
+
+#### `check-docker-logs-server.ps1`
+Script untuk cek log docker di server.
 
 **Cara Menggunakan:**
-
 ```powershell
-# Dengan default settings (72.61.142.109, root, ~/jargas-wajo-batang-kendal)
-.\scripts\deploy-with-migration.ps1
+# Log terakhir 200 baris
+.\scripts\active\check-docker-logs-server.ps1
 
-# Dengan custom settings
-.\scripts\deploy-with-migration.ps1 -ServerIP "192.168.1.100" -Username "admin" -ProjectPath "~/my-project"
+# Log real-time
+.\scripts\active\check-docker-logs-server.ps1 -Follow
+
+# Hanya error
+.\scripts\active\check-docker-logs-server.ps1 -ErrorsOnly
+
+# Custom jumlah baris
+.\scripts\active\check-docker-logs-server.ps1 -Lines 500
 ```
 
 **Parameter:**
-- `-ServerIP` (Optional): IP atau domain server (default: "72.61.142.109")
-- `-Username` (Optional): Username SSH (default: "root")
-- `-ProjectPath` (Optional): Path project di server (default: "~/jargas-wajo-batang-kendal")
+- `-Lines` (Optional): Jumlah baris log (default: 200)
+- `-Follow` (Optional): Follow log real-time
+- `-ErrorsOnly` (Optional): Hanya tampilkan error
 
 ---
 
-### `run-migration-server.ps1`
+### Database Operations
 
-Script PowerShell untuk menjalankan migration manual di server (jika auto-migrate tidak berjalan).
+#### `clear-database-vps.ps1`
+Script untuk menghapus semua data database di VPS (kecuali users, roles, pages, permissions).
+
+**⚠️ PERINGATAN:** Script ini akan menghapus SEMUA DATA dari database!
 
 **Cara Menggunakan:**
-
 ```powershell
-# Dengan default settings
-.\scripts\run-migration-server.ps1
-
-# Dengan custom settings
-.\scripts\run-migration-server.ps1 -ServerIP "192.168.1.100" -Username "admin" -ProjectPath "~/my-project"
+.\scripts\active\clear-database-vps.ps1
 ```
 
-**Parameter:**
-- `-ServerIP` (Optional): IP atau domain server (default: "72.61.142.109")
-- `-Username` (Optional): Username SSH (default: "root")
-- `-ProjectPath` (Optional): Path project di server (default: "~/jargas-wajo-batang-kendal")
+**Catatan:** Script akan meminta konfirmasi dua kali untuk keamanan.
 
 ---
 
-### `run-migration-server.sh`
+#### `run-migration-server.ps1` / `run-migration-server.sh`
+Script untuk menjalankan migration manual di server (jika auto-migrate tidak berjalan).
 
-Script Bash untuk menjalankan migration manual di server (untuk dijalankan langsung di server via SSH).
-
-**Cara Menggunakan:**
-
-```bash
-# Di server SSH
-cd ~/jargas-wajo-batang-kendal
-bash scripts/run-migration-server.sh
-
-# Atau dengan custom path
-bash scripts/run-migration-server.sh ~/custom-path
+**Cara Menggunakan (PowerShell):**
+```powershell
+.\scripts\active\run-migration-server.ps1
 ```
 
-**Catatan:** Script ini akan:
-1. Cek status migration saat ini
-2. Jalankan migration ke head
-3. Verifikasi migration berhasil
-4. Verifikasi tabel database sudah dibuat
+**Cara Menggunakan (Bash - di server):**
+```bash
+cd ~/jargas-wajo-batang-kendal
+bash scripts/active/run-migration-server.sh
+```
 
 ---
 
-### `fix-missing-columns-vps.ps1` / `fix-missing-columns-vps.sh`
+## 🔧 Script Setup (Folder `setup/`)
 
-Script untuk memperbaiki kolom yang missing di database VPS. Script ini menambahkan kolom-kolom yang diperlukan agar fitur DELETE user berfungsi dengan baik.
+Script untuk setup one-time. Berguna untuk setup server baru atau referensi konfigurasi.
 
-**Masalah yang diperbaiki:**
-- Error: `Unknown column 'surat_permintaans.status' in 'field list'`
-- Error: `Unknown column 'surat_jalans.nomor_surat_permintaan' in 'field list'`
-- Error: `Unknown column 'surat_jalans.nomor_barang_keluar' in 'field list'`
-- Error: `Unknown column 'surat_jalans.stock_out_id' in 'field list'`
+### `setup-env-dev-server.ps1` / `setup-env-dev-server.sh`
+Setup environment variables untuk development server.
 
-**Kolom yang ditambahkan:**
-- `surat_permintaans.status` (VARCHAR(50), NOT NULL, DEFAULT 'Draft') dengan index
-- `surat_jalans.nomor_surat_permintaan` (VARCHAR(255), NULL) dengan index
-- `surat_jalans.nomor_barang_keluar` (VARCHAR(255), NULL) dengan index
-- `surat_jalans.stock_out_id` (INT, NULL) dengan index dan foreign key
+### `setup-dev-domain.ps1`
+Setup domain development (devjargas.ptkiansantang.com).
 
-**Cara Menggunakan (PowerShell - Windows):**
+### `setup-port-8083-ssl.ps1` / `setup-port-8083-ssl.sh`
+Setup port 8083 dan SSL certificate untuk Adminer.
 
-```powershell
-# Dari root project
-.\scripts\fix-missing-columns-vps.ps1
+**Catatan:** Script di folder `setup/` biasanya hanya dijalankan sekali saat setup awal server.
 
-# Dengan custom database settings
-.\scripts\fix-missing-columns-vps.ps1 -DbHost "localhost" -DbUser "root" -DbPassword "password" -DbName "jargas_apbn" -DbPort 3306
-```
+---
 
-**Cara Menggunakan (Bash - Linux VPS):**
+## 📦 Script Archive (Folder `archive/`)
 
-```bash
-# Di server VPS via SSH
-cd ~/jargas-wajo-batang-kendal
-chmod +x scripts/fix-missing-columns-vps.sh
-./scripts/fix-missing-columns-vps.sh
+Script one-time fix yang sudah tidak diperlukan lagi karena:
+- Masalah sudah diperbaiki dan sudah ada di migration Alembic
+- Database production sudah memiliki kolom/tabel tersebut
+- Tidak ada rencana setup database baru dari awal
 
-# Atau dengan environment variables
-export DB_HOST="localhost"
-export DB_USER="root"
-export DB_PASSWORD="password"
-export DB_NAME="jargas_apbn"
-export DB_PORT="3306"
-./scripts/fix-missing-columns-vps.sh
-```
+### Script yang Di-archive:
 
-**Atau langsung jalankan SQL file via Docker (jika MySQL client tidak terinstall):**
+1. **Fix created_by column:**
+   - `fix-created-by-users.sh`
+   - `fix-created-by-users.ps1`
+   - `fix-created-by-vps-auto.ps1`
+   - `fix-created-by-vps-server.sh`
+   - `run-fix-created-by-on-vps.sh`
+   - `fix_created_by_users.sql`
 
-```bash
-# Di server VPS (via Docker container)
-docker exec -i jargas_mysql mysql -uroot -padmin123 jargas_apbn < scripts/fix_missing_columns_vps.sql
+2. **Fix harga materials:**
+   - `fix-harga-materials.sh`
+   - `fix-harga-materials.ps1`
+   - `fix-harga-materials-docker.sh`
+   - `fix_harga_materials.sql`
 
-# Atau gunakan script khusus Docker
-chmod +x scripts/fix-missing-columns-vps-docker.sh
-./scripts/fix-missing-columns-vps-docker.sh
-```
+3. **Fix missing columns:**
+   - `fix-missing-columns-vps.sh`
+   - `fix-missing-columns-vps.ps1`
+   - `fix-missing-columns-vps-docker.sh`
+   - `fix_missing_columns_vps.sql`
 
-**Parameter (PowerShell):**
-- `-DbHost` (Optional): Database host (default: "localhost")
-- `-DbUser` (Optional): Database user (default: "root")
-- `-DbPassword` (Optional): Database password (default: "")
-- `-DbName` (Optional): Database name (default: "jargas_apbn")
-- `-DbPort` (Optional): Database port (default: 3306)
+4. **Fix lainnya:**
+   - `fix-database-empty.ps1` (sudah ada auto-migration)
+   - `fix-dev-domain.ps1` (setup one-time)
+   - `debug-nginx-adminer.sh` (debug one-time)
+   - `update-nginx-adminer-dev.sh` (update one-time)
 
-**Catatan:**
-- Script ini aman dijalankan berkali-kali (idempotent) - akan mengecek apakah kolom sudah ada sebelum menambahkan
-- Tidak akan menghapus data yang sudah ada
-- Pastikan backup database sebelum menjalankan script (best practice)
+**⚠️ Catatan Penting:**
+- Script di folder `archive/` TIDAK PERLU dijalankan lagi
+- Di-archive untuk referensi historis saja
+- Jangan hapus script di folder `archive/` tanpa verifikasi terlebih dahulu
 
 ---
 
@@ -212,6 +260,7 @@ Untuk dokumentasi lengkap, lihat:
 - [DEPLOYMENT.md](../Catatan%20Penting/DEPLOYMENT.md) - Deployment guide
 - [DOCKER_SETUP.md](../Catatan%20Penting/DOCKER_SETUP.md) - Docker setup
 - [GHCR_SETUP.md](../Catatan%20Penting/GHCR_SETUP.md) - GHCR setup
+- [DELETE_DATABASE.md](../Catatan%20Penting/DELETE_DATABASE.md) - Database operations
 
 ---
 
@@ -223,4 +272,32 @@ Untuk dokumentasi lengkap, lihat:
 4. **Permissions**: Pastikan token memiliki permission yang diperlukan
 5. **Auto-Migration**: Migration otomatis berjalan saat backend start (AUTO_MIGRATE=True di docker-compose.yml)
 6. **SSH Access**: Pastikan SSH key sudah di-setup atau password sudah benar
+7. **Path Update**: Setelah reorganisasi, pastikan path script di dokumentasi lain sudah di-update
 
+---
+
+## 🔄 Migrasi Path Script
+
+Jika Anda menggunakan script dari dokumentasi lama, update path-nya:
+
+**Sebelum:**
+```powershell
+.\scripts\deploy-with-migration.ps1
+```
+
+**Sesudah:**
+```powershell
+.\scripts\active\deploy-with-migration.ps1
+```
+
+**Atau buat symlink/alias untuk kemudahan:**
+```powershell
+# Di PowerShell profile
+function Deploy-Production {
+    .\scripts\active\deploy-with-migration.ps1 @args
+}
+
+function Deploy-Dev {
+    .\scripts\active\deploy-dev.ps1 @args
+}
+```

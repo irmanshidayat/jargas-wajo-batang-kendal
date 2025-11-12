@@ -1184,6 +1184,7 @@ async def get_stock_out_list(
         
         # Exclude stock out yang dibuat dari return (retur keluar)
         # Stock out yang dibuat dari return akan punya Return dengan stock_out_id = stock_out.id dan is_released = 1
+        # Filter ini memastikan stock out dari retur keluar tidak muncul di list stock out biasa
         from app.models.inventory.return_model import Return
         from sqlalchemy import not_, exists
         query = query.filter(
@@ -1191,7 +1192,7 @@ async def get_stock_out_list(
                 and_(
                     Return.stock_out_id == StockOut.id,
                     Return.is_released == 1,
-                    or_(Return.is_deleted == 0, Return.is_deleted.is_(None))
+                    Return.is_deleted == 0
                 )
             )
         )
@@ -1314,12 +1315,13 @@ async def get_stock_outs_by_mandor(
         )
 
         # Exclude stock out yang dibuat dari return (retur keluar)
+        # Filter ini memastikan stock out dari retur keluar tidak muncul di list stock out biasa
         query = query.filter(
             ~exists().where(
                 and_(
                     Return.stock_out_id == StockOut.id,
                     Return.is_released == 1,
-                    or_(Return.is_deleted == 0, Return.is_deleted.is_(None))
+                    Return.is_deleted == 0
                 )
             )
         )
@@ -1336,7 +1338,7 @@ async def get_stock_outs_by_mandor(
         from app.models.inventory.installed import Installed
 
         so_ids = [so.id for so in stock_outs]
-        linked_installed_sum_by_so: dict[int, int] = {}
+        linked_installed_sum_by_so: dict[int, float] = {}
         if so_ids:
             rows = (
                 db.query(Installed.stock_out_id, func.coalesce(func.sum(Installed.quantity), 0))
@@ -1345,21 +1347,36 @@ async def get_stock_outs_by_mandor(
                 .group_by(Installed.stock_out_id)
                 .all()
             )
-            linked_installed_sum_by_so = {row[0]: int(row[1] or 0) for row in rows}
+            # Konversi ke float untuk mempertahankan nilai desimal (2.10 bukan 2.00)
+            linked_installed_sum_by_so = {row[0]: float(row[1] or 0) for row in rows}
 
         for so in stock_outs:
             stock_out_dict = StockOutResponse.model_validate(so).model_dump(mode="json")
-            terpasang = max(0, int(linked_installed_sum_by_so.get(so.id, 0)))
-            # Get total kondisi reject untuk stock_out_id ini
-            total_reject = stock_service.return_repo.get_total_reject_by_stock_out(so.id)
-            # Rumus Sisa Bisa Dipasang: Quantity Keluar - Terpasang - Reject (barang reject tidak bisa dipasang)
-            sisa = max(0, (so.quantity or 0) - terpasang - total_reject)
-            total_quantity_kembali = stock_service.return_repo.get_total_quantity_by_stock_out(so.id)
+            # Gunakan float untuk mempertahankan nilai desimal
+            terpasang = max(0.0, float(linked_installed_sum_by_so.get(so.id, 0)))
+            # Get total kondisi reject untuk stock_out_id ini (kembalikan Decimal, konversi ke float untuk response)
+            total_reject = float(stock_service.return_repo.get_total_reject_by_stock_out(so.id))
+            # Get total quantity kembali (kembalikan Decimal, konversi ke float untuk response)
+            total_quantity_kembali = float(stock_service.return_repo.get_total_quantity_by_stock_out(so.id))
+            
+            # BEST PRACTICE: Logika sisa yang jelas dan konsisten
+            qty_keluar = float(so.quantity or 0)
+            
+            # 1. Sisa Total = Qty Keluar - Terpasang (untuk informasi umum)
+            #    Menunjukkan sisa total yang belum terpasang
+            quantity_sisa_total = max(0.0, qty_keluar - terpasang)
+            
+            # 2. Sisa Bisa Kembali = Qty Keluar - Terpasang - Sudah Kembali (untuk validasi)
+            #    Menunjukkan sisa yang masih bisa dikembalikan
+            #    Note: Reject tidak mengurangi sisa bisa kembali karena reject sudah tidak bisa digunakan lagi
+            quantity_sisa_kembali = max(0.0, qty_keluar - terpasang - total_quantity_kembali)
 
             stock_out_dict["quantity_terpasang"] = terpasang
-            stock_out_dict["quantity_sisa_kembali"] = sisa
-            stock_out_dict["quantity_sudah_kembali"] = max(0, total_quantity_kembali)
-            stock_out_dict["quantity_sisa"] = sisa
+            stock_out_dict["quantity_sisa_total"] = quantity_sisa_total  # Sisa total (Qty - Terpasang)
+            stock_out_dict["quantity_sisa_kembali"] = quantity_sisa_kembali  # Sisa bisa kembali (Qty - Terpasang - Sudah Kembali)
+            stock_out_dict["quantity_sudah_kembali"] = max(0.0, total_quantity_kembali)
+            stock_out_dict["quantity_reject"] = max(0.0, total_reject)  # Informasi reject terpisah
+            stock_out_dict["quantity_sisa"] = quantity_sisa_kembali  # Backward compatibility
 
             result_data.append(stock_out_dict)
         
@@ -1429,12 +1446,13 @@ async def get_stock_outs_by_nomor(
         )
         
         # Exclude stock out yang dibuat dari return (retur keluar)
+        # Filter ini memastikan stock out dari retur keluar tidak muncul di list stock out biasa
         query = query.filter(
             ~exists().where(
                 and_(
                     Return.stock_out_id == StockOut.id,
                     Return.is_released == 1,
-                    or_(Return.is_deleted == 0, Return.is_deleted.is_(None))
+                    Return.is_deleted == 0
                 )
             )
         )
@@ -1952,6 +1970,91 @@ async def create_installed(
         status_code=status.HTTP_201_CREATED
     )
 
+@router.get(
+    "/installed/by-stock-out/{stock_out_id}",
+    response_model=None,
+    status_code=status.HTTP_200_OK,
+    summary="Get installed items by stock_out_id",
+    tags=["Installed"]
+)
+async def get_installed_by_stock_out_id(
+    stock_out_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    project_id: int = Depends(get_current_project)
+):
+    """Ambil daftar barang terpasang berdasarkan stock_out_id"""
+    check_role_permission(current_user, [UserRole.ADMIN, UserRole.GUDANG])
+
+    try:
+        from sqlalchemy.orm import joinedload, load_only
+        from app.models.inventory.installed import Installed
+        from app.models.inventory.material import Material
+        from app.models.inventory.mandor import Mandor
+        from app.models.inventory.stock_out import StockOut
+        
+        # Query installed dengan stock_out_id yang sesuai
+        query = db.query(Installed).options(
+            load_only(
+                Installed.id,
+                Installed.material_id,
+                Installed.quantity,
+                Installed.tanggal_pasang,
+                Installed.mandor_id,
+                Installed.stock_out_id,
+                Installed.evidence_paths,
+                Installed.no_register,
+                Installed.created_at,
+                Installed.updated_at,
+            ),
+            joinedload(Installed.material).load_only(
+                Material.id,
+                Material.kode_barang,
+                Material.nama_barang,
+                Material.satuan,
+            ),
+            joinedload(Installed.mandor).load_only(
+                Mandor.id,
+                Mandor.nama,
+            ),
+            joinedload(Installed.stock_out).load_only(
+                StockOut.id,
+                StockOut.nomor_barang_keluar,
+            ),
+        ).filter(
+            Installed.is_deleted == 0,
+            Installed.stock_out_id == stock_out_id
+        )
+        
+        # Filter by project_id jika ada: gunakan Material.project_id
+        if project_id is not None:
+            query = query.join(Material, Installed.material_id == Material.id).filter(Material.project_id == project_id)
+        
+        items = query.order_by(Installed.id.desc()).all()
+        
+        # Pastikan semua relationship ter-load sebelum serialize
+        for item in items:
+            if item.material_id:
+                _ = item.material
+            if item.mandor_id:
+                _ = item.mandor
+            if item.stock_out_id:
+                _ = item.stock_out
+
+        return success_response(
+            data=[InstalledResponse.model_validate(it).model_dump(mode="json") for it in items],
+            message="Daftar barang terpasang berhasil diambil"
+        )
+    except SQLAlchemyError as e:
+        logger = logging.getLogger(__name__)
+        logger.error(f"Database error getting installed by stock_out_id: {str(e)}", exc_info=True)
+        db.rollback()
+        raise ValidationError(f"Gagal mengambil daftar barang terpasang: Kesalahan database")
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error getting installed by stock_out_id: {str(e)}", exc_info=True)
+        raise ValidationError(f"Gagal mengambil daftar barang terpasang: {str(e)}")
+
 
 # ========== RETURN ROUTES ==========
 @router.post(
@@ -1980,6 +2083,7 @@ async def create_return(
     Bisa menggunakan nomor_barang_keluar (string) atau stock_out_id (int).
     Jika nomor_barang_keluar diisi, akan dicari stock_out_id-nya.
     """
+    logger = logging.getLogger(__name__)
     check_role_permission(current_user, [UserRole.ADMIN, UserRole.GUDANG])
     
     stock_service = StockService(db)
@@ -2015,19 +2119,20 @@ async def create_return(
             raise ValidationError("Nomor Barang Keluar atau Stock Out ID wajib diisi")
 
         # Validasi quantity kondisi baik dan reject
-        quantity_baik = quantity_kondisi_baik or 0
-        quantity_reject = quantity_kondisi_reject or 0
+        # BEST PRACTICE: Gunakan nilai untuk validasi, tapi jangan ubah nilai asli yang akan disimpan
+        quantity_baik_for_validation = quantity_kondisi_baik if quantity_kondisi_baik is not None else 0
+        quantity_reject_for_validation = quantity_kondisi_reject if quantity_kondisi_reject is not None else 0
         
-        logger.info(f"[DEBUG] Return validation - quantity_kondisi_baik: {quantity_kondisi_baik} -> {quantity_baik}, "
-                   f"quantity_kondisi_reject: {quantity_kondisi_reject} -> {quantity_reject}, "
+        logger.info(f"[DEBUG] Return validation - quantity_kondisi_baik: {quantity_kondisi_baik}, "
+                   f"quantity_kondisi_reject: {quantity_kondisi_reject}, "
                    f"quantity_kembali: {quantity_kembali}")
         
         # Validasi: quantity kondisi baik dan reject harus >= 0
-        if quantity_baik < 0 or quantity_reject < 0:
+        if quantity_baik_for_validation < 0 or quantity_reject_for_validation < 0:
             raise ValidationError("Quantity kondisi baik dan reject tidak boleh negatif")
         
         # Validasi: total quantity kondisi baik + reject harus > 0
-        total_kondisi = quantity_baik + quantity_reject
+        total_kondisi = quantity_baik_for_validation + quantity_reject_for_validation
         logger.info(f"[DEBUG] Return validation - total_kondisi: {total_kondisi}, quantity_kembali: {quantity_kembali}")
         
         if total_kondisi <= 0:
@@ -2039,7 +2144,7 @@ async def create_return(
         # Validasi: jumlah quantity kondisi baik + reject tidak boleh lebih dari quantity_kembali
         if total_kondisi > quantity_kembali:
             raise ValidationError(
-                f"Jumlah quantity kondisi baik ({quantity_baik}) + kondisi reject ({quantity_reject}) = {total_kondisi} "
+                f"Jumlah quantity kondisi baik ({quantity_baik_for_validation}) + kondisi reject ({quantity_reject_for_validation}) = {total_kondisi} "
                 f"tidak boleh lebih dari quantity kembali ({quantity_kembali})"
             )
 
@@ -2070,27 +2175,35 @@ async def create_return(
                 "evidence_paths": save_evidence_paths_to_db(evidence_paths)
             })
 
-        # Check discrepancy after create
-        notification_service = NotificationService(db)
-        notification_service.check_discrepancy()
+        # Check discrepancy after create (non-blocking)
+        try:
+            notification_service = NotificationService(db)
+            notification_service.check_discrepancy()
+        except Exception as e:
+            logger.warning(f"Error checking discrepancy after return create: {str(e)}", exc_info=True)
+            # Non-blocking, continue even if discrepancy check fails
 
-        # Audit log
-        audit_service = AuditLogService(db)
-        audit_service.create_log(
-            user_id=current_user.id,
-            action=ActionType.CREATE,
-            table_name="returns",
-            record_id=return_item.id,
-            new_values={
-                "mandor_id": mandor_id,
-                "material_id": material_id,
-                "quantity_kembali": quantity_kembali,
-                "quantity_kondisi_baik": quantity_kondisi_baik,
-                "quantity_kondisi_reject": quantity_kondisi_reject,
-                "tanggal_kembali": str(tanggal_kembali)
-            },
-            description="Create return item"
-        )
+        # Audit log (non-blocking)
+        try:
+            audit_service = AuditLogService(db)
+            audit_service.create_log(
+                user_id=current_user.id,
+                action=ActionType.CREATE,
+                table_name="returns",
+                record_id=return_item.id,
+                new_values={
+                    "mandor_id": mandor_id,
+                    "material_id": material_id,
+                    "quantity_kembali": quantity_kembali,
+                    "quantity_kondisi_baik": quantity_kondisi_baik,
+                    "quantity_kondisi_reject": quantity_kondisi_reject,
+                    "tanggal_kembali": str(tanggal_kembali)
+                },
+                description="Create return item"
+            )
+        except Exception as e:
+            logger.warning(f"Error creating audit log for return: {str(e)}", exc_info=True)
+            # Non-blocking, continue even if audit log fails
 
         return success_response(
             data=ReturnResponse.model_validate(return_item).model_dump(mode="json"),
@@ -2100,9 +2213,10 @@ async def create_return(
     except (ValidationError, NotFoundError) as e:
         from fastapi import HTTPException
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error creating return: {str(e)}", exc_info=True)
         from fastapi import HTTPException
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Gagal mencatat retur barang")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Gagal mencatat retur barang: {str(e)}")
 
 
 @router.get(
@@ -2296,36 +2410,69 @@ async def release_return_to_stock_out(
         project_id=project_id
     )
 
-    # Update evidence paths with actual ID
+    # Update evidence paths with actual ID (non-critical operation)
     if evidence_paths:
-        from app.utils.file_upload import save_evidence_paths_to_db
-        stock_out_repo = stock_service.stock_out_repo
-        stock_out_repo.update(stock_out.id, {
-            "evidence_paths": save_evidence_paths_to_db(evidence_paths)
-        })
+        try:
+            from app.utils.file_upload import save_evidence_paths_to_db
+            stock_out_repo = stock_service.stock_out_repo
+            stock_out_repo.update(stock_out.id, {
+                "evidence_paths": save_evidence_paths_to_db(evidence_paths)
+            })
+        except Exception as e:
+            # Log error but don't fail the request - operasi utama sudah berhasil
+            logger.warning(f"Failed to update evidence paths for stock_out {stock_out.id}: {str(e)}")
 
-    # Audit log
-    audit_service = AuditLogService(db)
-    audit_service.create_log(
-        user_id=current_user.id,
-        action=ActionType.CREATE,
-        table_name="stock_outs",
-        record_id=stock_out.id,
-        new_values={
-            "nomor_barang_keluar": stock_out.nomor_barang_keluar,
-            "tanggal_keluar": str(tanggal_keluar),
-        },
-        description=f"Release return to stock out: return_id={return_id}"
-    )
+    # Audit log (non-critical operation)
+    try:
+        audit_service = AuditLogService(db)
+        audit_service.create_log(
+            user_id=current_user.id,
+            action=ActionType.CREATE,
+            table_name="stock_outs",
+            record_id=stock_out.id,
+            new_values={
+                "nomor_barang_keluar": stock_out.nomor_barang_keluar,
+                "tanggal_keluar": str(tanggal_keluar),
+            },
+            description=f"Release return to stock out: return_id={return_id}"
+        )
+    except Exception as e:
+        # Log error but don't fail the request - operasi utama sudah berhasil
+        logger.warning(f"Failed to create audit log for stock_out {stock_out.id}: {str(e)}")
 
-    # Refresh return detail for response if needed
-    ret = stock_service.return_repo.get(return_id)
+    # Refresh return detail for response (non-critical operation)
+    # Operasi utama sudah berhasil, jadi jika refresh return error, kita tetap return sukses
+    ret = None
+    try:
+        ret = stock_service.return_repo.get(return_id, project_id=project_id)
+    except Exception as e:
+        # Log error but don't fail the request - operasi utama sudah berhasil
+        logger.warning(f"Failed to refresh return {return_id} for response: {str(e)}")
+        # Try to get return without project_id filter as fallback
+        try:
+            ret = stock_service.return_repo.get(return_id)
+        except Exception as e2:
+            logger.warning(f"Failed to get return {return_id} even without project filter: {str(e2)}")
+            # If all else fails, we'll still return success with stock_out data
+            # The return data is not critical for the response since the main operation succeeded
+            # We'll create a minimal return response from the stock_out data
+            pass
 
+    # Prepare response data
+    response_data = {
+        "stock_out": StockOutResponse.model_validate(stock_out).model_dump(mode="json"),
+    }
+    
+    # Add return data if available (non-critical)
+    if ret:
+        try:
+            response_data["return"] = ReturnResponse.model_validate(ret).model_dump(mode="json")
+        except Exception as e:
+            logger.warning(f"Failed to serialize return data: {str(e)}")
+            # Continue without return data - operasi utama sudah berhasil
+    
     return success_response(
-        data={
-            "stock_out": StockOutResponse.model_validate(stock_out).model_dump(mode="json"),
-            "return": ReturnResponse.model_validate(ret).model_dump(mode="json"),
-        },
+        data=response_data,
         message="Return berhasil dikeluarkan kembali",
         status_code=status.HTTP_201_CREATED
     )
