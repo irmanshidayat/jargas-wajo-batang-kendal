@@ -42,6 +42,8 @@ git add . && git commit -m "Update" && git push origin dev
 # Auto-deploy via GitHub Actions → https://devjargas.ptkiansantang.com
 ```
 
+testt
+
 ### Manual Deploy (Jika GitHub Actions Tidak Aktif)
 
 **Production:**
