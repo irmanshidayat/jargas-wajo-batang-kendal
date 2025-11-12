@@ -44,39 +44,138 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=no ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} << 'EOF'
             set -e
-            cd ${{ env.PROJECT_PATH }}
             
-            echo "📥 Pulling latest code from dev branch..."
-            git fetch origin
-            git checkout dev
-            git reset --hard origin/dev
+            echo "=========================================="
+            echo "🚀 Starting Deployment Process"
+            echo "=========================================="
             
-            echo "🔍 Verifying environment files..."
-            if [ ! -f .env.dev ] || [ ! -f backend/.env.dev ]; then
-              echo "❌ Error: .env.dev files not found!"
-              echo "Please ensure .env.dev and backend/.env.dev exist on server"
+            # Step 1: Verify project path exists
+            echo ""
+            echo "Step 1: Verifying project path..."
+            if [ ! -d "${{ env.PROJECT_PATH }}" ]; then
+              echo "❌ Error: Project path does not exist: ${{ env.PROJECT_PATH }}"
+              echo "Please create the directory first or check the path"
+              exit 1
+            fi
+            echo "✅ Project path exists"
+            
+            # Step 2: Navigate to project directory
+            echo ""
+            echo "Step 2: Navigating to project directory..."
+            cd ${{ env.PROJECT_PATH }} || {
+              echo "❌ Error: Cannot cd to ${{ env.PROJECT_PATH }}"
+              exit 1
+            }
+            echo "✅ Current directory: $(pwd)"
+            
+            # Step 3: Pull latest code
+            echo ""
+            echo "Step 3: Pulling latest code from dev branch..."
+            if ! git fetch origin 2>&1; then
+              echo "⚠️  Warning: git fetch failed, continuing anyway..."
+            fi
+            
+            if ! git checkout dev 2>&1; then
+              echo "❌ Error: Cannot checkout dev branch"
+              echo "Current branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"
+              exit 1
+            fi
+            
+            if ! git reset --hard origin/dev 2>&1; then
+              echo "❌ Error: Cannot reset to origin/dev"
+              echo "Please check if dev branch exists in remote"
+              exit 1
+            fi
+            echo "✅ Code updated to latest dev branch"
+            echo "   Commit: $(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+            
+            # Step 4: Verify environment files
+            echo ""
+            echo "Step 4: Verifying environment files..."
+            if [ ! -f .env.dev ]; then
+              echo "❌ Error: .env.dev not found in project root"
+              echo "Current directory: $(pwd)"
+              echo "Files in current directory:"
+              ls -la | head -10
+              exit 1
+            fi
+            
+            if [ ! -f backend/.env.dev ]; then
+              echo "❌ Error: backend/.env.dev not found"
+              echo "Files in backend directory:"
+              ls -la backend/ | head -10 || echo "backend/ directory does not exist"
               exit 1
             fi
             echo "✅ Environment files found"
             
-            echo "🔨 Building Docker containers (development)..."
-            docker-compose -f docker-compose.dev.yml --env-file .env.dev build --no-cache
+            # Step 5: Verify docker-compose file exists
+            echo ""
+            echo "Step 5: Verifying docker-compose.dev.yml..."
+            if [ ! -f docker-compose.dev.yml ]; then
+              echo "❌ Error: docker-compose.dev.yml not found"
+              exit 1
+            fi
+            echo "✅ docker-compose.dev.yml found"
             
-            echo "🛑 Stopping containers..."
-            docker-compose -f docker-compose.dev.yml --env-file .env.dev down
+            # Step 6: Build Docker containers
+            echo ""
+            echo "Step 6: Building Docker containers (development)..."
+            if ! docker-compose -f docker-compose.dev.yml --env-file .env.dev build --no-cache 2>&1; then
+              echo "❌ Error: Docker build failed"
+              echo "Checking Docker status..."
+              docker ps -a || echo "Docker not accessible"
+              exit 1
+            fi
+            echo "✅ Docker build completed"
             
-            echo "🚀 Starting containers..."
-            docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d
+            # Step 7: Stop existing containers
+            echo ""
+            echo "Step 7: Stopping existing containers..."
+            docker-compose -f docker-compose.dev.yml --env-file .env.dev down 2>&1 || {
+              echo "⚠️  Warning: Some containers may not have stopped cleanly"
+            }
+            echo "✅ Containers stopped"
             
-            echo "⏳ Waiting for services to be ready..."
+            # Step 8: Start containers
+            echo ""
+            echo "Step 8: Starting containers..."
+            if ! docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d 2>&1; then
+              echo "❌ Error: Failed to start containers"
+              echo "Checking container status..."
+              docker-compose -f docker-compose.dev.yml --env-file .env.dev ps || true
+              echo "Checking logs..."
+              docker-compose -f docker-compose.dev.yml --env-file .env.dev logs --tail=50 || true
+              exit 1
+            fi
+            echo "✅ Containers started"
+            
+            # Step 9: Wait for services
+            echo ""
+            echo "Step 9: Waiting for services to be ready..."
             sleep 30
             
-            echo "📋 Checking container status..."
+            # Step 10: Check container status
+            echo ""
+            echo "Step 10: Checking container status..."
             docker-compose -f docker-compose.dev.yml --env-file .env.dev ps
             
+            # Check if containers are running
+            RUNNING_CONTAINERS=$(docker-compose -f docker-compose.dev.yml --env-file .env.dev ps -q | wc -l)
+            if [ "$RUNNING_CONTAINERS" -eq 0 ]; then
+              echo "⚠️  Warning: No containers are running"
+              echo "Checking logs for errors..."
+              docker-compose -f docker-compose.dev.yml --env-file .env.dev logs --tail=100 || true
+            else
+              echo "✅ $RUNNING_CONTAINERS container(s) running"
+            fi
+            
+            echo ""
+            echo "=========================================="
             echo "✅ Deployment completed!"
+            echo "=========================================="
             echo "🌐 Frontend: https://devjargas.ptkiansantang.com"
             echo "🔗 Backend: https://devjargas.ptkiansantang.com/api/v1/health"
+            echo ""
           EOF
 
       - name: Health Check

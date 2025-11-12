@@ -243,9 +243,28 @@ ssh root@72.61.142.109 "cat ~/.ssh/authorized_keys | grep github-actions"
 - Cek GitHub Secret `SSH_PRIVATE_KEY` sudah benar
 - Test SSH connection: `ssh -i ~/.ssh/github_actions root@72.61.142.109`
 
+**Error: "Process completed with exit code 1"**
+- ❌ **Penyebab**: Ada command yang gagal dalam proses deployment
+- ✅ **Solusi**:
+  1. Cek log detail di GitHub Actions untuk melihat step mana yang gagal
+  2. Kemungkinan penyebab:
+     - **Project path tidak ada**: Pastikan folder `~/jargas-wajo-batang-kendal-dev` sudah dibuat di server
+     - **Git branch tidak ada**: Pastikan branch `dev` sudah di-push ke remote
+     - **File .env.dev tidak ada**: Pastikan file `.env.dev` dan `backend/.env.dev` ada di server
+     - **Docker build gagal**: Cek log Docker untuk error detail
+     - **Docker-compose gagal**: Cek apakah Docker dan Docker Compose sudah terinstall di server
+  3. Verifikasi manual di server:
+     ```bash
+     ssh root@72.61.142.109
+     cd ~/jargas-wajo-batang-kendal-dev
+     ls -la .env.dev backend/.env.dev
+     docker-compose -f docker-compose.dev.yml --env-file .env.dev ps
+     ```
+
 **Error: ".env files not found"**
 - Pastikan file `.env.dev` dan `backend/.env.dev` ada di server di path `~/jargas-wajo-batang-kendal-dev`
 - Jika belum ada, copy dari local atau buat manual di server
+- Verifikasi dengan: `ssh root@72.61.142.109 "ls -la ~/jargas-wajo-batang-kendal-dev/.env.dev"`
 
 **Error: "Health check failed"**
 - Tunggu lebih lama (migration mungkin masih berjalan, bisa sampai 2-3 menit)
