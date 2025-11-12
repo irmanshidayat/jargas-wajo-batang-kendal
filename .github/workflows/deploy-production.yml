@@ -11,7 +11,7 @@ env:
   SERVER_USER: root
   PROJECT_PATH: ~/jargas-wajo-batang-kendal
   GITHUB_REPO: https://github.com/irmanshidayat/jargas-wajo-batang-kendal.git
-  GITHUB_REPO: https://github.com/irmanshidayat/jargas-wajo-batang-kendal.git
+  # GITHUB_REPO: https://github.com/irmanshidayat/jargas-wajo-batang-kendal.git
 
 jobs:
   deploy:
