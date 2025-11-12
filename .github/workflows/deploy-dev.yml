@@ -10,6 +10,7 @@ env:
   SERVER_IP: 72.61.142.109
   SERVER_USER: root
   PROJECT_PATH: ~/jargas-wajo-batang-kendal-dev
+  GITHUB_REPO: https://github.com/irmanshidayat/jargas-wajo-batang-kendal.git
 
 jobs:
   deploy:
@@ -45,19 +46,22 @@ jobs:
           ssh -o StrictHostKeyChecking=no ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} bash -s << 'DEPLOY_SCRIPT'
             set -e
             
+            # Expand ~ to full path
             PROJECT_PATH="${{ env.PROJECT_PATH }}"
+            PROJECT_PATH=$(eval echo "$PROJECT_PATH")
+            GITHUB_REPO="${{ env.GITHUB_REPO }}"
             
             echo "=========================================="
             echo "🚀 Starting Deployment Process"
             echo "=========================================="
             echo "Project Path: $PROJECT_PATH"
+            echo "GitHub Repo: $GITHUB_REPO"
             echo ""
             
             # Step 1: Verify project path exists
             echo "Step 1: Verifying project path..."
             if [ ! -d "$PROJECT_PATH" ]; then
-              echo "❌ Error: Project path does not exist: $PROJECT_PATH"
-              echo "Please create the directory first or check the path"
+              echo "⚠️  Project path does not exist: $PROJECT_PATH"
               echo "Creating directory..."
               mkdir -p "$PROJECT_PATH" || {
                 echo "❌ Error: Cannot create directory $PROJECT_PATH"
@@ -77,30 +81,94 @@ jobs:
             }
             echo "✅ Current directory: $(pwd)"
             
-            # Step 3: Pull latest code
+            # Step 3: Check if Git repository exists, if not clone it
             echo ""
-            echo "Step 3: Pulling latest code from dev branch..."
+            echo "Step 3: Checking Git repository..."
+            if [ ! -d ".git" ]; then
+              echo "⚠️  Git repository not found in $PROJECT_PATH"
+              echo "Checking if directory is empty..."
+              FILE_COUNT=$(find . -maxdepth 1 -not -name '.' -not -name '..' 2>/dev/null | wc -l)
+              if [ "$FILE_COUNT" -gt 0 ]; then
+                echo "⚠️  Directory is not empty ($FILE_COUNT items found)"
+                echo "Files in directory:"
+                ls -la | head -10
+                echo ""
+                echo "Initializing git repository in existing directory..."
+                git init || {
+                  echo "❌ Error: Cannot initialize git repository"
+                  exit 1
+                }
+                # Check if remote already exists
+                if ! git remote get-url origin >/dev/null 2>&1; then
+                  git remote add origin "$GITHUB_REPO" || {
+                    echo "❌ Error: Cannot add remote origin"
+                    exit 1
+                  }
+                else
+                  echo "⚠️  Remote origin already exists, updating URL..."
+                  git remote set-url origin "$GITHUB_REPO" || {
+                    echo "⚠️  Warning: Cannot update remote URL"
+                  }
+                fi
+                echo "✅ Git repository initialized"
+              else
+                echo "Directory is empty, cloning repository..."
+                git clone -b dev "$GITHUB_REPO" . || {
+                  echo "❌ Error: Cannot clone repository"
+                  exit 1
+                }
+                echo "✅ Repository cloned successfully"
+              fi
+            else
+              echo "✅ Git repository found"
+            fi
+            
+            # Step 4: Pull latest code
+            echo ""
+            echo "Step 4: Pulling latest code from dev branch..."
+            # Fetch latest changes
             if ! git fetch origin 2>&1; then
-              echo "⚠️  Warning: git fetch failed, continuing anyway..."
+              echo "⚠️  Warning: git fetch failed, checking remote..."
+              if ! git remote get-url origin >/dev/null 2>&1; then
+                echo "⚠️  No remote origin found, adding remote..."
+                git remote add origin "$GITHUB_REPO" || {
+                  echo "❌ Error: Cannot add remote origin"
+                  exit 1
+                }
+                git fetch origin || {
+                  echo "❌ Error: Cannot fetch from remote"
+                  exit 1
+                }
+              fi
             fi
             
+            # Checkout dev branch
             if ! git checkout dev 2>&1; then
-              echo "❌ Error: Cannot checkout dev branch"
-              echo "Current branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"
-              exit 1
+              echo "⚠️  Cannot checkout dev branch, trying to create it from origin/dev..."
+              git checkout -b dev origin/dev 2>&1 || {
+                echo "❌ Error: Cannot checkout or create dev branch"
+                echo "Current branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"
+                echo "Available branches:"
+                git branch -a || true
+                exit 1
+              }
             fi
             
+            # Reset to origin/dev
             if ! git reset --hard origin/dev 2>&1; then
               echo "❌ Error: Cannot reset to origin/dev"
               echo "Please check if dev branch exists in remote"
+              echo "Current branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"
+              echo "Remote branches:"
+              git branch -r || true
               exit 1
             fi
             echo "✅ Code updated to latest dev branch"
             echo "   Commit: $(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
             
-            # Step 4: Verify environment files
+            # Step 5: Verify environment files
             echo ""
-            echo "Step 4: Verifying environment files..."
+            echo "Step 5: Verifying environment files..."
             if [ ! -f .env.dev ]; then
               echo "❌ Error: .env.dev not found in project root"
               echo "Current directory: $(pwd)"
@@ -117,18 +185,18 @@ jobs:
             fi
             echo "✅ Environment files found"
             
-            # Step 5: Verify docker-compose file exists
+            # Step 6: Verify docker-compose file exists
             echo ""
-            echo "Step 5: Verifying docker-compose.dev.yml..."
+            echo "Step 6: Verifying docker-compose.dev.yml..."
             if [ ! -f docker-compose.dev.yml ]; then
               echo "❌ Error: docker-compose.dev.yml not found"
               exit 1
             fi
             echo "✅ docker-compose.dev.yml found"
             
-            # Step 6: Build Docker containers
+            # Step 7: Build Docker containers
             echo ""
-            echo "Step 6: Building Docker containers (development)..."
+            echo "Step 7: Building Docker containers (development)..."
             if ! docker-compose -f docker-compose.dev.yml --env-file .env.dev build --no-cache 2>&1; then
               echo "❌ Error: Docker build failed"
               echo "Checking Docker status..."
@@ -137,17 +205,17 @@ jobs:
             fi
             echo "✅ Docker build completed"
             
-            # Step 7: Stop existing containers
+            # Step 8: Stop existing containers
             echo ""
-            echo "Step 7: Stopping existing containers..."
+            echo "Step 8: Stopping existing containers..."
             docker-compose -f docker-compose.dev.yml --env-file .env.dev down 2>&1 || {
               echo "⚠️  Warning: Some containers may not have stopped cleanly"
             }
             echo "✅ Containers stopped"
             
-            # Step 8: Start containers
+            # Step 9: Start containers
             echo ""
-            echo "Step 8: Starting containers..."
+            echo "Step 9: Starting containers..."
             if ! docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d 2>&1; then
               echo "❌ Error: Failed to start containers"
               echo "Checking container status..."
@@ -158,14 +226,14 @@ jobs:
             fi
             echo "✅ Containers started"
             
-            # Step 9: Wait for services
+            # Step 10: Wait for services
             echo ""
-            echo "Step 9: Waiting for services to be ready..."
+            echo "Step 10: Waiting for services to be ready..."
             sleep 30
             
-            # Step 10: Check container status
+            # Step 11: Check container status
             echo ""
-            echo "Step 10: Checking container status..."
+            echo "Step 11: Checking container status..."
             docker-compose -f docker-compose.dev.yml --env-file .env.dev ps
             
             # Check if containers are running
