@@ -42,7 +42,7 @@ git add . && git commit -m "Update" && git push origin dev
 # Auto-deploy via GitHub Actions → https://devjargas.ptkiansantang.com
 ```
 
-testt
+test
 
 ### Manual Deploy (Jika GitHub Actions Tidak Aktif)
 
@@ -165,9 +165,18 @@ ssh-copy-id -i ~/.ssh/github_actions.pub root@72.61.142.109
 ```
 
 3. **Tambah Private Key ke GitHub Secrets:**
-   - GitHub Repository → Settings → Secrets → Actions
-   - New secret: `SSH_PRIVATE_KEY`
-   - Value: Copy isi dari `~/.ssh/github_actions`
+   - Buka repository di GitHub
+   - Klik **Settings** → **Secrets and variables** → **Actions**
+   - Klik **New repository secret**
+   - **Name**: `SSH_PRIVATE_KEY` (harus sama persis, case-sensitive)
+   - **Value**: Copy seluruh isi dari file `~/.ssh/github_actions` (termasuk `-----BEGIN OPENSSH PRIVATE KEY-----` dan `-----END OPENSSH PRIVATE KEY-----`)
+   - Klik **Add secret**
+   
+   **Cara copy private key di Windows PowerShell:**
+   ```powershell
+   Get-Content "$env:USERPROFILE\.ssh\github_actions" | Set-Clipboard
+   ```
+   Lalu paste ke GitHub Secret value.
 
 ### Cara Kerja
 
@@ -183,16 +192,28 @@ ssh-copy-id -i ~/.ssh/github_actions.pub root@72.61.142.109
 
 ### Troubleshooting GitHub Actions
 
+**Error: "The ssh-private-key argument is empty"**
+- ❌ **Penyebab**: GitHub Secret `SSH_PRIVATE_KEY` belum dikonfigurasi atau nama secret salah
+- ✅ **Solusi**:
+  1. Buka GitHub Repository → Settings → Secrets and variables → Actions
+  2. Pastikan ada secret dengan nama **`SSH_PRIVATE_KEY`** (case-sensitive, tanpa spasi)
+  3. Jika belum ada, tambahkan dengan cara di atas
+  4. Jika sudah ada, cek apakah value-nya benar (harus termasuk BEGIN dan END lines)
+  5. Setelah update secret, jalankan ulang workflow: Actions → Deploy Development → Run workflow
+
 **Error: "Permission denied"**
-- Verifikasi SSH key sudah di-copy ke server
-- Cek GitHub Secret `SSH_PRIVATE_KEY`
+- Verifikasi SSH key sudah di-copy ke server dengan: `ssh-copy-id -i ~/.ssh/github_actions.pub root@72.61.142.109`
+- Cek GitHub Secret `SSH_PRIVATE_KEY` sudah benar
+- Test SSH connection: `ssh -i ~/.ssh/github_actions root@72.61.142.109`
 
 **Error: ".env files not found"**
-- Pastikan file `.env` dan `backend/.env` ada di server
+- Pastikan file `.env.dev` dan `backend/.env.dev` ada di server di path `~/jargas-wajo-batang-kendal-dev`
+- Jika belum ada, copy dari local atau buat manual di server
 
 **Error: "Health check failed"**
-- Tunggu lebih lama (migration mungkin masih berjalan)
-- Cek container logs: `docker-compose logs backend`
+- Tunggu lebih lama (migration mungkin masih berjalan, bisa sampai 2-3 menit)
+- Cek container logs: `docker-compose -f docker-compose.dev.yml --env-file .env.dev logs backend`
+- Pastikan backend container sudah running: `docker-compose -f docker-compose.dev.yml --env-file .env.dev ps`
 
 ---
 
