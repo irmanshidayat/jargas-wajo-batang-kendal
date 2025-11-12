@@ -5,7 +5,7 @@ import { extractItems } from '@/utils/api'
 import { getSisaPasang, getInstalledMaxQty, formatInstalledStockOutOption } from '../utils/installedHelpers'
 import EvidenceUpload from '../components/EvidenceUpload'
 import Swal from 'sweetalert2'
-import { getTodayDate, formatDecimal } from '@/utils/helpers'
+import { getTodayDate, formatDecimal, formatDecimalOne } from '@/utils/helpers'
 import {
   sanitizeItems,
   validateItemsNotEmpty,
@@ -72,7 +72,7 @@ export default function InstalledPage() {
         if (selectedStockOut.material_id && sisaKembali > 0) {
           return {
             material_id: selectedStockOut.material_id.toString(),
-            quantity: sisaKembali.toString(),
+            quantity: formatDecimalOne(sisaKembali),
           }
         } else {
           return {
@@ -443,7 +443,7 @@ export default function InstalledPage() {
                           <p className="mt-2 text-xs text-blue-700">
                             Material: <strong>{selectedStockOut.material?.nama_barang || `ID: ${selectedStockOut.material_id}`}</strong>
                             {' | '}Mandor: <strong>{selectedStockOut.mandor?.nama || `ID: ${selectedStockOut.mandor_id}`}</strong>
-                            {' | '}Sisa bisa dipasang: <strong>{sisa !== undefined ? formatDecimal(sisa) : '-'}</strong>
+                            {' | '}Sisa bisa dipasang: <strong>{formatDecimalOne(sisa)}</strong>
                             {' | '}Tanggal: <strong>{tanggalDisplay}</strong>
                           </p>
                         )
@@ -550,7 +550,10 @@ export default function InstalledPage() {
                             type="number"
                             step="0.01"
                             min="0.01"
-                            max={matchingStockOut ? getInstalledMaxQty(matchingStockOut as any) : undefined}
+                            max={matchingStockOut ? (() => {
+                              const maxQty = getInstalledMaxQty(matchingStockOut as any)
+                              return maxQty !== undefined ? parseFloat(formatDecimalOne(maxQty)) : undefined
+                            })() : undefined}
                             value={row.quantity}
                             onChange={(e) => {
                               const v = e.target.value
@@ -566,7 +569,7 @@ export default function InstalledPage() {
                               if (isInputDisabled) return 'Sisa bisa dipasang sudah 0, tidak bisa menambah quantity'
                               if (!isAutoFilled || !matchingStockOut) return ''
                               const maxQty = getInstalledMaxQty(matchingStockOut as any)
-                              return maxQty !== undefined ? `Maksimal: ${maxQty} (sisa barang kembali yang bisa dipasang)` : ''
+                              return maxQty !== undefined ? `Maksimal: ${formatDecimalOne(maxQty)} (sisa barang kembali yang bisa dipasang)` : ''
                             })()}
                           />
                           {isAutoFilled && matchingStockOut && (() => {
@@ -574,7 +577,7 @@ export default function InstalledPage() {
                             if (maxQty === undefined) return null
                             return (
                               <p className={`mt-1 text-xs ${maxQty <= 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                                Sisa bisa dipasang: <strong>{formatDecimal(maxQty)}</strong>
+                                Sisa bisa dipasang: <strong>{formatDecimalOne(maxQty)}</strong>
                               </p>
                             )
                           })()}

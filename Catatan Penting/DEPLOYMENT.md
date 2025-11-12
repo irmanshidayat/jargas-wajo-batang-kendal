@@ -22,12 +22,20 @@ cd "C:\Irman\Coding Jargas APBN\Jargas APBN"
 git add . && git commit -m "Update" && git push origin main
 ```
 
-**Server:**
+**Server (Production):**
 ```bash
 ssh root@72.61.142.109
 cd ~/jargas-wajo-batang-kendal
 git pull origin main
-docker-compose build --no-cache && docker-compose up -d
+docker-compose --env-file .env build --no-cache && docker-compose --env-file .env up -d
+```
+
+**Server (Development):**
+```bash
+ssh root@72.61.142.109
+cd ~/jargas-wajo-batang-kendal-dev
+git pull origin dev
+docker-compose -f docker-compose.dev.yml --env-file .env.dev build --no-cache && docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d
 ```
 
 ### Metode 2: Via SCP (Cepat)
@@ -37,30 +45,61 @@ docker-compose build --no-cache && docker-compose up -d
 scp -r .\backend\ root@72.61.142.109:~/jargas-wajo-batang-kendal/backend
 scp -r .\frontend\ root@72.61.142.109:~/jargas-wajo-batang-kendal/frontend
 
-# Rebuild di server
-ssh root@72.61.142.109 "cd ~/jargas-wajo-batang-kendal && docker-compose build --no-cache && docker-compose up -d"
+# Rebuild di server (Production)
+ssh root@72.61.142.109 "cd ~/jargas-wajo-batang-kendal && docker-compose --env-file .env build --no-cache && docker-compose --env-file .env up -d"
+
+# Rebuild di server (Development)
+ssh root@72.61.142.109 "cd ~/jargas-wajo-batang-kendal-dev && docker-compose -f docker-compose.dev.yml --env-file .env.dev build --no-cache && docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d"
 ```
 
 ### Script Otomatis
 
+**Production:**
 ```powershell
 # Dari Windows
-.\scripts\deploy-with-migration.ps1
+.\scripts\active\deploy-production.ps1
+```
+
+**Development:**
+```powershell
+# Dari Windows
+.\scripts\active\deploy-dev.ps1
+```
+
+**Legacy (masih bisa digunakan):**
+```powershell
+# Dari Windows
+.\scripts\active\deploy-with-migration.ps1
 ```
 
 ---
 
 ## 🔨 Rebuild Docker
 
+### Production
+
 ```bash
 # Di server
 cd ~/jargas-wajo-batang-kendal
-docker-compose build --no-cache
-docker-compose up -d
+docker-compose --env-file .env build --no-cache
+docker-compose --env-file .env up -d
 
 # Rebuild service tertentu
-docker-compose build --no-cache backend
-docker-compose up -d backend
+docker-compose --env-file .env build --no-cache backend
+docker-compose --env-file .env up -d backend
+```
+
+### Development
+
+```bash
+# Di server
+cd ~/jargas-wajo-batang-kendal-dev
+docker-compose -f docker-compose.dev.yml --env-file .env.dev build --no-cache
+docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d
+
+# Rebuild service tertentu
+docker-compose -f docker-compose.dev.yml --env-file .env.dev build --no-cache backend
+docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d backend
 ```
 
 **Catatan:** Migration otomatis berjalan saat backend start (`AUTO_MIGRATE=True`).
@@ -75,18 +114,36 @@ docker-compose up -d backend
 
 ## ✅ Verifikasi
 
+### Production
+
 ```bash
 # Status container
-docker-compose ps
+docker-compose --env-file .env ps
 
 # Log migration
-docker-compose logs backend | grep -i migration
+docker-compose --env-file .env logs backend | grep -i migration
 
 # Cek tabel database
-docker-compose exec mysql mysql -u root -padmin123 jargas_apbn -e "SHOW TABLES;"
+docker-compose --env-file .env exec mysql mysql -u root -padmin123 jargas_apbn -e "SHOW TABLES;"
 
 # Health check
-curl http://localhost/health
+curl http://localhost:8001/health
+```
+
+### Development
+
+```bash
+# Status container
+docker-compose -f docker-compose.dev.yml --env-file .env.dev ps
+
+# Log migration
+docker-compose -f docker-compose.dev.yml --env-file .env.dev logs backend | grep -i migration
+
+# Cek tabel database
+docker-compose -f docker-compose.dev.yml --env-file .env.dev exec mysql mysql -u root -padmin123 jargas_apbn_dev -e "SHOW TABLES;"
+
+# Health check
+curl http://localhost:8002/health
 ```
 
 **Akses:**
@@ -126,7 +183,7 @@ docker-compose logs backend --tail 100
 ```bash
 docker-compose exec backend alembic upgrade head
 # Atau dari Windows
-.\scripts\run-migration-server.ps1
+.\scripts\active\run-migration-server.ps1
 ```
 
 **Verifikasi:**
@@ -377,7 +434,7 @@ git push origin main
 **Script Manual:**
 ```powershell
 # Dari Windows
-.\scripts\deploy-with-migration.ps1
+.\scripts\active\deploy-with-migration.ps1
 ```
 
 **Verifikasi Setelah Push ke Main:**
@@ -452,7 +509,7 @@ git branch -a
 **Script Manual:**
 ```powershell
 # Dari Windows
-.\scripts\deploy-dev.ps1
+.\scripts\active\deploy-dev.ps1
 ```
 
 **Verifikasi Setelah Push ke Dev:**
@@ -562,7 +619,7 @@ echo "CORS_ORIGINS=https://devjargas.ptkiansantang.com,http://localhost:8082" >>
 **Opsi A: Menggunakan Script (Recommended)**
 ```powershell
 # Dari Windows PowerShell
-.\scripts\deploy-dev.ps1
+.\scripts\active\deploy-dev.ps1
 ```
 
 **Opsi B: Manual Deploy**
@@ -815,7 +872,7 @@ git push -u origin dev
 
 3. **Manual Deploy:**
    ```powershell
-   .\scripts\deploy-dev.ps1
+   .\scripts\active\deploy-dev.ps1
    ```
 
 ---
@@ -897,10 +954,10 @@ Write-Host ""
 **Cara menggunakan:**
 ```powershell
 # Dengan default message
-.\scripts\push-to-dev.ps1
+.\scripts\active\push-to-dev.ps1
 
 # Dengan custom message
-.\scripts\push-to-dev.ps1 -Message "feat: Tambah fitur export Excel"
+.\scripts\active\push-to-dev.ps1 -Message "feat: Tambah fitur export Excel"
 ```
 
 ---

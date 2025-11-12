@@ -1,50 +1,123 @@
 # Dokumentasi Docker Setup - Jargas APBN
 
-1) Rebuild container backend (jika belum):
-docker-compose build backend
-docker-compose up -d backend
+> **Catatan:** Dokumentasi ini menggunakan struktur environment terpisah untuk Production dan Development. Pastikan menggunakan `--env-file` yang sesuai.
 
-2) Restart backend container agar perubahan berlaku:
-docker-compose restart backend
-Atau restart semua services:
-docker-compose restart
-3) Verifikasi migration dengan melihat log backend:
-docker-compose logs backend | grep -i migration
-Atau lihat log lengkap:
-4) Verifikasi tabel sudah dibuat (opsional):
-# Masuk ke MySQL containerdocker-compose exec mysql mysql -u jargas_user -p jargas_apbn# Setelah masuk, jalankan:SHOW TABLES;# Keluar dari MySQLexit;
+## Quick Reference
+
+### Production
+```bash
+# Rebuild container backend
+docker-compose --env-file .env build backend
+docker-compose --env-file .env up -d backend
+
+# Restart backend container
+docker-compose --env-file .env restart backend
+# Atau restart semua services
+docker-compose --env-file .env restart
+
+# Verifikasi migration
+docker-compose --env-file .env logs backend | grep -i migration
+
+# Verifikasi tabel database
+docker-compose --env-file .env exec mysql mysql -u root -padmin123 jargas_apbn -e "SHOW TABLES;"
+```
+
+### Development
+```bash
+# Rebuild container backend
+docker-compose -f docker-compose.dev.yml --env-file .env.dev build backend
+docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d backend
+
+# Restart backend container
+docker-compose -f docker-compose.dev.yml --env-file .env.dev restart backend
+# Atau restart semua services
+docker-compose -f docker-compose.dev.yml --env-file .env.dev restart
+
+# Verifikasi migration
+docker-compose -f docker-compose.dev.yml --env-file .env.dev logs backend | grep -i migration
+
+# Verifikasi tabel database
+docker-compose -f docker-compose.dev.yml --env-file .env.dev exec mysql mysql -u root -padmin123 jargas_apbn_dev -e "SHOW TABLES;"
+```
 
 Dokumentasi lengkap untuk setup dan menjalankan aplikasi Jargas APBN menggunakan Docker.
 
-Tabel masih kosong karena migration belum dijalankan. Berikut langkah-langkahnya:
-Langkah 1: Cek Status Migration
-Cek apakah ada migration yang perlu dijalankan:
-docker-compose exec backend python scripts/check_migration_status.py
-Atau cek dengan alembic:
-docker-compose exec backend alembic current
-Langkah 2: Jalankan Migration
-Jalankan migration untuk membuat semua tabel:
-docker-compose exec backend alembic upgrade head
-Atau gunakan script Python:
-docker-compose exec backend python scripts/run_migrations.py
-Langkah 3: Cek Log dengan PowerShell (bukan grep)
-Di PowerShell, gunakan Select-String sebagai pengganti grep:
-docker-compose logs backend | Select-String -Pattern "migration" -CaseSensitive:$false
-Atau lihat log lengkap:
-docker-compose logs backend --tail 100
-Langkah 4: Verifikasi Tabel Setelah Migration
-Setelah migration selesai, cek kembali tabel:
-docker-compose exec mysql mysql -u jargas_user -p jargas_apbn# Password: JargasAPBN2024Secure!# Di dalam MySQL:SHOW TABLES;# Keluarexit;
-Jika Ingin Auto-Migrate (Opsional)
-Jika ingin migration berjalan otomatis saat backend start:
-Edit file .env di root project, ubah:
-   AUTO_MIGRATE=False
-menjadi:
-   AUTO_MIGRATE=True
-Restart backend:
-   docker-compose restart backend
-Ringkasan Perintah yang Perlu Dijalankan
-# 1. Jalankan migration (WAJIB untuk membuat tabel)docker-compose exec backend alembic upgrade head# 2. Cek log (PowerShell)docker-compose logs backend | Select-String -Pattern "migration" -CaseSensitive:$false# 3. Verifikasi tabel sudah dibuatdocker-compose exec mysql mysql -u jargas_user -p jargas_apbn# Masukkan password: JargasAPBN2024Secure!# Lalu: SHOW TABLES;
+## 📝 Migration Manual (Jika Auto-Migrate Tidak Berjalan)
+
+### Production
+
+**Langkah 1: Cek Status Migration**
+```bash
+docker-compose --env-file .env exec backend python scripts/check_migration_status.py
+# Atau cek dengan alembic:
+docker-compose --env-file .env exec backend alembic current
+```
+
+**Langkah 2: Jalankan Migration**
+```bash
+docker-compose --env-file .env exec backend alembic upgrade head
+# Atau gunakan script Python:
+docker-compose --env-file .env exec backend python scripts/run_migrations.py
+```
+
+**Langkah 3: Cek Log**
+```bash
+# Di Linux/Mac
+docker-compose --env-file .env logs backend | grep -i migration
+
+# Di PowerShell (Windows)
+docker-compose --env-file .env logs backend | Select-String -Pattern "migration" -CaseSensitive:$false
+
+# Atau lihat log lengkap:
+docker-compose --env-file .env logs backend --tail 100
+```
+
+**Langkah 4: Verifikasi Tabel**
+```bash
+docker-compose --env-file .env exec mysql mysql -u root -padmin123 jargas_apbn -e "SHOW TABLES;"
+```
+
+### Development
+
+**Langkah 1: Cek Status Migration**
+```bash
+docker-compose -f docker-compose.dev.yml --env-file .env.dev exec backend python scripts/check_migration_status.py
+# Atau cek dengan alembic:
+docker-compose -f docker-compose.dev.yml --env-file .env.dev exec backend alembic current
+```
+
+**Langkah 2: Jalankan Migration**
+```bash
+docker-compose -f docker-compose.dev.yml --env-file .env.dev exec backend alembic upgrade head
+# Atau gunakan script Python:
+docker-compose -f docker-compose.dev.yml --env-file .env.dev exec backend python scripts/run_migrations.py
+```
+
+**Langkah 3: Cek Log**
+```bash
+# Di Linux/Mac
+docker-compose -f docker-compose.dev.yml --env-file .env.dev logs backend | grep -i migration
+
+# Di PowerShell (Windows)
+docker-compose -f docker-compose.dev.yml --env-file .env.dev logs backend | Select-String -Pattern "migration" -CaseSensitive:$false
+```
+
+**Langkah 4: Verifikasi Tabel**
+```bash
+docker-compose -f docker-compose.dev.yml --env-file .env.dev exec mysql mysql -u root -padmin123 jargas_apbn_dev -e "SHOW TABLES;"
+```
+
+## ⚙️ Auto-Migrate Configuration
+
+Migration otomatis berjalan saat backend start jika `AUTO_MIGRATE=True` di file environment.
+
+**Production:**
+- Edit `backend/.env`, set `AUTO_MIGRATE=True`
+- Restart: `docker-compose --env-file .env restart backend`
+
+**Development:**
+- Edit `backend/.env.dev`, set `AUTO_MIGRATE=True`
+- Restart: `docker-compose -f docker-compose.dev.yml --env-file .env.dev restart backend`
 
 
 ## 📋 Daftar Isi
@@ -111,46 +184,98 @@ cd "Jargas APBN"
 
 ### 2. Setup Environment Variables
 
-**Langkah 1**: Copy file `.env.example` ke `.env`
+Proyek ini menggunakan **environment terpisah** untuk Production dan Development. Setiap environment memiliki file `.env` sendiri.
 
-```bash
-cp .env.example .env
+#### 🏭 Production Environment
+
+**Langkah 1**: Jalankan script setup production
+
+```powershell
+# Dari Windows
+.\scripts\setup\setup-env-production.ps1
 ```
 
-**Langkah 2**: Edit file `.env` dan sesuaikan nilai-nilainya:
+Atau manual:
+
+```bash
+# Copy template
+cp .env.example .env
+cp backend/env.example backend/.env
+```
+
+**Langkah 2**: Edit file `.env` dan `backend/.env`, sesuaikan nilai-nilainya:
 
 ```bash
 # Menggunakan editor favorit Anda
 nano .env
-# atau
-notepad .env
-# atau
-code .env
+nano backend/.env
 ```
 
 **Langkah 3**: Pastikan untuk mengubah nilai-nilai penting:
 
 ```env
-# Database Password (WAJIB diubah!)
-DB_PASSWORD=your_secure_password_here
-
-# Secret Key untuk JWT (WAJIB diubah!)
-# Generate dengan: python -c "import secrets; print(secrets.token_urlsafe(32))"
-SECRET_KEY=your_generated_secret_key_here
-
-# Debug mode (False untuk production)
+# Di root .env
+SECRET_KEY=your-production-secret-key-here
+DB_NAME=jargas_apbn
 DEBUG=False
+CORS_ORIGINS=https://jargas.ptkiansantang.com
+
+# Di backend/.env
+DB_HOST=mysql
+DB_PASSWORD=your_secure_password_here
+SECRET_KEY=your-production-secret-key-here  # Harus sama dengan root .env
+DEBUG=False
+CORS_ORIGINS=https://jargas.ptkiansantang.com
 ```
 
-**Langkah 4**: Generate Secret Key (opsional tapi direkomendasikan)
+#### 🧪 Development Environment
 
-Jika menggunakan Python:
+**Langkah 1**: Jalankan script setup development
+
+```powershell
+# Dari Windows
+.\scripts\setup\setup-env-development.ps1
+```
+
+Atau manual:
+
+```bash
+# Copy template
+cp .env.dev.example .env.dev
+cp backend/.env.dev.example backend/.env.dev
+```
+
+**Langkah 2**: Edit file `.env.dev` dan `backend/.env.dev`, sesuaikan nilai-nilainya:
+
+```env
+# Di root .env.dev
+SECRET_KEY=your-development-secret-key-here  # Berbeda dari production!
+DB_NAME=jargas_apbn_dev
+DEBUG=True
+CORS_ORIGINS=https://devjargas.ptkiansantang.com,http://localhost:8082
+
+# Di backend/.env.dev
+DB_HOST=mysql
+DB_PASSWORD=admin123
+SECRET_KEY=your-development-secret-key-here  # Harus sama dengan root .env.dev
+DEBUG=True
+CORS_ORIGINS=https://devjargas.ptkiansantang.com,http://localhost:8082
+```
+
+#### 🔑 Generate Secret Key
+
+Generate Secret Key yang unik untuk setiap environment:
 
 ```bash
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
 Atau online: https://generate-secret.vercel.app/32
+
+**⚠️ PENTING:**
+- Secret Key untuk Production dan Development **HARUS BERBEDA**
+- Secret Key di root `.env` dan `backend/.env` **HARUS SAMA** untuk environment yang sama
+- Jangan commit file `.env` atau `.env.dev` ke repository (sudah di-ignore)
 
 ### 3. Verifikasi Docker
 
@@ -164,55 +289,106 @@ Jika ada error, start Docker Desktop terlebih dahulu.
 
 ## ▶️ Menjalankan Aplikasi
 
-### Quick Start (Development)
+### Quick Start
+
+#### 🏭 Production
 
 ```bash
-# Build dan start semua services
-docker-compose up -d --build
+# Build dan start semua services (production)
+docker-compose --env-file .env up -d --build
 
 # Melihat logs
-docker-compose logs -f
+docker-compose --env-file .env logs -f
+```
+
+#### 🧪 Development
+
+```bash
+# Build dan start semua services (development)
+docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d --build
+
+# Melihat logs
+docker-compose -f docker-compose.dev.yml --env-file .env.dev logs -f
 ```
 
 ### Langkah-langkah Detail
 
 **1. Build Images**
 
+**Production:**
 ```bash
 # Build semua images
-docker-compose build
+docker-compose --env-file .env build
 
 # Build service tertentu
-docker-compose build backend
-docker-compose build frontend
-docker-compose build mysql
+docker-compose --env-file .env build backend
+docker-compose --env-file .env build frontend
+docker-compose --env-file .env build mysql
+```
+
+**Development:**
+```bash
+# Build semua images
+docker-compose -f docker-compose.dev.yml --env-file .env.dev build
+
+# Build service tertentu
+docker-compose -f docker-compose.dev.yml --env-file .env.dev build backend
+docker-compose -f docker-compose.dev.yml --env-file .env.dev build frontend
+docker-compose -f docker-compose.dev.yml --env-file .env.dev build mysql
 ```
 
 **2. Start Services**
 
+**Production:**
 ```bash
 # Start semua services di background
-docker-compose up -d
+docker-compose --env-file .env up -d
 
 # Start service tertentu
-docker-compose up -d mysql
-docker-compose up -d backend
-docker-compose up -d frontend
+docker-compose --env-file .env up -d mysql
+docker-compose --env-file .env up -d backend
+docker-compose --env-file .env up -d frontend
+```
+
+**Development:**
+```bash
+# Start semua services di background
+docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d
+
+# Start service tertentu
+docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d mysql
+docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d backend
+docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d frontend
 ```
 
 **3. Check Status**
 
+**Production:**
 ```bash
 # Lihat status semua services
-docker-compose ps
+docker-compose --env-file .env ps
 
 # Lihat logs
-docker-compose logs -f
+docker-compose --env-file .env logs -f
 
 # Logs service tertentu
-docker-compose logs -f backend
-docker-compose logs -f frontend
-docker-compose logs -f mysql
+docker-compose --env-file .env logs -f backend
+docker-compose --env-file .env logs -f frontend
+docker-compose --env-file .env logs -f mysql
+```
+
+**Development:**
+```bash
+# Lihat status semua services
+docker-compose -f docker-compose.dev.yml --env-file .env.dev ps
+
+# Lihat logs
+docker-compose -f docker-compose.dev.yml --env-file .env.dev logs -f
+
+# Logs service tertentu
+docker-compose -f docker-compose.dev.yml --env-file .env.dev logs -f backend
+docker-compose -f docker-compose.dev.yml --env-file .env.dev logs -f frontend
+docker-compose -f docker-compose.dev.yml --env-file .env.dev logs -f mysql
 ```
 
 **4. Akses Aplikasi**

@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from sqlalchemy import and_
 from datetime import date
+from decimal import Decimal
 from app.models.inventory.installed import Installed
 from app.repositories.base import BaseRepository
 
@@ -91,7 +92,7 @@ class InstalledRepository(BaseRepository[Installed]):
         except Exception:
             return []
 
-    def get_total_quantity_by_stock_out(self, stock_out_id: int) -> int:
+    def get_total_quantity_by_stock_out(self, stock_out_id: int) -> Decimal:
         """Get total quantity installed untuk stock_out_id tertentu (tidak termasuk yang deleted)"""
         try:
             from sqlalchemy import func, or_
@@ -101,9 +102,10 @@ class InstalledRepository(BaseRepository[Installed]):
                     or_(self.model.is_deleted == 0, self.model.is_deleted.is_(None))
                 )
             ).scalar()
-            return result if result is not None else 0
+            # Konversi ke Decimal untuk konsistensi tipe data
+            return Decimal(str(result)) if result is not None else Decimal('0')
         except Exception:
-            return 0
+            return Decimal('0')
 
     def soft_delete(self, id: int, deleted_by: int) -> Optional[Installed]:
         """Soft delete installed item"""

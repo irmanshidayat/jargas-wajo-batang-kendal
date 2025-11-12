@@ -341,22 +341,53 @@ def create_summary_sheet(
         returns = [r for r in return_repo.get_by_date_range(start_date, end_date, 0, 10000)
                   if r.material_id == material.id]
         
-        total_in = sum(si.quantity for si in stock_ins)
-        total_out = sum(so.quantity for so in stock_outs)
-        total_installed = sum(i.quantity for i in installed)
-        total_return = sum(r.quantity_kembali for r in returns)
-        # Get returns yang sudah dikeluarkan kembali (is_released = 1) untuk retur keluar
+        # Get returns yang sudah dikeluarkan kembali (is_released = 1)
         returns_released = [r for r in returns if getattr(r, 'is_released', 0) == 1]
-        total_retur_keluar = sum(r.quantity_kembali for r in returns_released)
-        total_kondisi_baik = sum((r.quantity_kondisi_baik or 0) for r in returns)
+        # Get returns yang BELUM dikeluarkan lagi (is_released = 0)
+        returns_not_released = [r for r in returns if getattr(r, 'is_released', 0) == 0]
+        
+        # PENTING: Filter stock_out yang berasal dari retur keluar
+        # Stock out dari retur keluar TIDAK mengurangi stok karena sudah pernah masuk ke gudang sebagai return
+        # Identifikasi stock_out dari retur keluar: ada Return dengan stock_out_id = stock_out.id dan is_released = 1
+        stock_out_ids_from_return = {r.stock_out_id for r in returns_released if r.stock_out_id is not None}
+        stock_outs_excluding_return = [so for so in stock_outs if so.id not in stock_out_ids_from_return]
+        
+        total_in = sum(si.quantity for si in stock_ins)
+        # Hanya hitung stock_out yang BUKAN dari retur keluar
+        total_out = sum(so.quantity for so in stock_outs_excluding_return)
+        total_installed = sum(i.quantity for i in installed)
+        
+        # BEST PRACTICE: Perhitungan total_kembali (sync dengan stock_service.py)
+        # total_kembali = semua quantity_kembali - kondisi baik yang sudah dikeluarkan
+        # Karena hanya kondisi baik yang dikeluarkan, kondisi reject tetap di gudang
+        total_quantity_kembali_all = sum(r.quantity_kembali for r in returns)
+        total_kondisi_baik_released = sum((r.quantity_kondisi_baik or 0) for r in returns_released)
+        total_return = total_quantity_kembali_all - total_kondisi_baik_released
+        
+        # BEST PRACTICE: Kondisi baik hanya dari return yang BELUM dikeluarkan lagi
+        # Return yang sudah dikeluarkan lagi, kondisi baiknya sudah dikeluarkan
+        total_kondisi_baik = sum((r.quantity_kondisi_baik or 0) for r in returns_not_released)
+        
+        # BEST PRACTICE: Kondisi reject dari SEMUA return (termasuk yang is_released=1)
+        # Karena kondisi reject TIDAK ikut dikeluarkan, tetap di gudang dan tetap terhitung
         total_kondisi_reject = sum((r.quantity_kondisi_reject or 0) for r in returns)
         
-        # Rumus Stock Balance yang Dinamis & Best Practice (sync dengan stock_service.py)
-        # Keluar Efektif = Keluar - Retur Keluar (retur keluar mengurangi efek keluar karena sudah kembali ke gudang)
-        keluar_efektif = total_out - total_retur_keluar
-        # Stock Saat Ini = Masuk - Keluar Efektif + Kembali
-        current_stock = total_in - keluar_efektif + total_return
+        # BEST PRACTICE: Rumus Stock Balance yang menghindari double counting (sync dengan stock_service.py)
+        # Alur bisnis:
+        # 1. Masuk: Barang masuk ke gudang (+)
+        # 2. Keluar: Barang keluar dari gudang (-), TIDAK termasuk retur keluar
+        # 3. Kembali: Barang dikembalikan ke gudang (+) - HANYA yang BELUM dikeluarkan lagi
+        # 4. Terpasang: Barang yang sudah terpasang di lapangan (-)
+        #
+        # Stock Saat Ini = Masuk - Terpasang
+        # Penjelasan:
+        # - Stock Saat Ini adalah sisa barang yang masih ada di gudang
+        # - Barang yang sudah terpasang tidak lagi ada di gudang, jadi dikurangi
+        # - "Kembali" dan "Keluar" sudah tercermin dalam perhitungan terpasang
+        current_stock = total_in - total_installed
+        
         # Stok Ready = Stock Saat Ini - Kondisi Reject (barang reject tidak bisa dikeluarkan)
+        # Kondisi reject hanya dari return yang belum dikeluarkan lagi
         stock_ready = max(0, current_stock - total_kondisi_reject)
         
         ws.cell(row=idx, column=1, value=material.kode_barang).border = BORDER

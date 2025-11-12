@@ -8,8 +8,9 @@ import {
   printSuratPermintaanPDF,
   type SuratPermintaanData
 } from '@/utils/pdfGenerator'
-import { inventoryService, Material, SuratPermintaanCreateRequest } from '../services/inventoryService'
+import { inventoryService, Material, Mandor, SuratPermintaanCreateRequest } from '../services/inventoryService'
 import MaterialSelector from '../components/MaterialSelector'
+import MandorSelector from '../components/MandorSelector'
 import { useAppSelector } from '@/store/hooks'
 
 interface FormItem {
@@ -70,6 +71,8 @@ export default function SuratPermintaanPage() {
   const [items, setItems] = useState<FormItem[]>([createEmptyItem()])
   const [materials, setMaterials] = useState<Material[]>([])
   const [materialStocks, setMaterialStocks] = useState<{ [key: number]: number }>({})
+  const [mandors, setMandors] = useState<Mandor[]>([])
+  const [loadingMandors, setLoadingMandors] = useState(false)
   const [signatures, setSignatures] = useState<SignatureData>({
     pemohon: '',
     menyetujui: '',
@@ -81,6 +84,16 @@ export default function SuratPermintaanPage() {
 
   useEffect(() => {
     loadMaterials()
+    loadMandors()
+    
+    // Reload mandors saat window focus (setelah kembali dari halaman mandors)
+    const handleFocus = () => {
+      loadMandors()
+    }
+    window.addEventListener('focus', handleFocus)
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+    }
   }, [])
 
   const loadMaterials = async () => {
@@ -103,6 +116,29 @@ export default function SuratPermintaanPage() {
         title: 'Error',
         text: error.response?.data?.detail || error.response?.data?.message || 'Gagal memuat data materials',
       })
+    }
+  }
+
+  const loadMandors = async () => {
+    try {
+      setLoadingMandors(true)
+      const response = await inventoryService.getMandors(1, 1000)
+      // extractPaginatedResponse mengembalikan: { data: [...], total, page, limit, message }
+      const mandorsData = response.data || []
+      setMandors(mandorsData as Mandor[])
+    } catch (error: any) {
+      // Skip canceled errors - tidak perlu tampilkan error untuk request yang di-cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || error?.message === 'canceled') {
+        return
+      }
+      
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: error?.response?.data?.detail || 'Gagal memuat data mandors',
+      })
+    } finally {
+      setLoadingMandors(false)
     }
   }
 
@@ -773,11 +809,17 @@ export default function SuratPermintaanPage() {
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Pemohon (Mandor)
               </label>
-              <Input
-                type="text"
+              <MandorSelector
                 value={signatures.pemohon}
-                onChange={(e) => setSignatures({ ...signatures, pemohon: e.target.value })}
+                mandors={mandors}
+                onSelect={(mandor) => {
+                  setSignatures({ ...signatures, pemohon: mandor ? mandor.nama : '' })
+                }}
+                onManualChange={(value) => {
+                  setSignatures({ ...signatures, pemohon: value })
+                }}
                 placeholder="Nama Pemohon"
+                disabled={loadingMandors}
               />
             </div>
             <div>

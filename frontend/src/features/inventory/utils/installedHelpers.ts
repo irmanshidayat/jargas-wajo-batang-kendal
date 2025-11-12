@@ -1,4 +1,5 @@
 import { StockOut } from '../services/inventoryService'
+import { formatDecimalOne } from '@/utils/helpers'
 
 export const getSisaPasang = (stockOut: Partial<StockOut> & Record<string, any>): number | undefined => {
   if (stockOut == null) return undefined
@@ -19,7 +20,7 @@ export const formatInstalledStockOutOption = (stockOut: Partial<StockOut> & Reco
   const materialName = stockOut.material?.nama_barang || `Material ID: ${stockOut.material_id}`
   const mandorName = stockOut.mandor?.nama || `Mandor ID: ${stockOut.mandor_id}`
   const sisa = getSisaPasang(stockOut)
-  return `${stockOut.nomor_barang_keluar} - ${materialName} (Mandor: ${mandorName}, Sisa: ${sisa ?? '-'})`
+  return `${stockOut.nomor_barang_keluar} - ${materialName} (Mandor: ${mandorName}, Sisa: ${formatDecimalOne(sisa)})`
 }
 
 

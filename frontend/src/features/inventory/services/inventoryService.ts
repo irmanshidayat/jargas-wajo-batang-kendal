@@ -56,8 +56,10 @@ export interface StockOut {
   material?: Material
   quantity: number
   quantity_terpasang?: number  // Total quantity yang sudah terpasang
-  quantity_sisa_kembali?: number  // Sisa barang kembali (Barang Keluar - Barang Terpasang)
+  quantity_sisa_total?: number  // Sisa total (Qty Keluar - Terpasang) - untuk informasi
+  quantity_sisa_kembali?: number  // Sisa bisa kembali (Qty Keluar - Terpasang - Sudah Kembali) - untuk validasi
   quantity_sudah_kembali?: number  // Total quantity yang sudah dikembalikan
+  quantity_reject?: number  // Total quantity reject (informasi terpisah)
   quantity_sisa?: number  // Sisa quantity yang bisa dikembalikan (backward compatibility)
   tanggal_keluar: string
   evidence_paths?: string
@@ -700,6 +702,11 @@ export const inventoryService = {
         'Content-Type': 'multipart/form-data',
       },
     })
+    return extractData(response)
+  },
+
+  getInstalledByStockOutId: async (stockOutId: number) => {
+    const response = await apiClient.get(API_ENDPOINTS.INVENTORY.INSTALLED.GET_BY_STOCK_OUT(stockOutId))
     return extractData(response)
   },
 

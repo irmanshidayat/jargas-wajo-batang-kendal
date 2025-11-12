@@ -143,22 +143,12 @@ export default function InventoryDashboardPage() {
   const summaryTotals = useMemo(() => {
     return {
       totalMasuk: stockBalance.reduce((sum, item) => sum + item.total_masuk, 0),
-      // Exclude retur keluar dari total keluar agar tidak dobel hitung
-      totalKeluar: stockBalance.reduce((sum, item) => {
-        const keluar = item.total_keluar || 0
-        const returKeluar = item.total_retur_keluar || 0
-        const adjusted = Math.max(0, keluar - returKeluar)
-        return sum + adjusted
-      }, 0),
+      // Backend sudah exclude retur keluar dari total_keluar, jadi tidak perlu adjustment lagi
+      totalKeluar: stockBalance.reduce((sum, item) => sum + (item.total_keluar || 0), 0),
       totalTerpasang: stockBalance.reduce((sum, item) => sum + (item.total_terpasang || 0), 0),
-      // Stock Saat Ini = Masuk - Keluar (Keluar sudah disesuaikan di atas)
-      totalStockSaatIni: stockBalance.reduce((sum, item) => {
-        const masuk = item.total_masuk || 0
-        const keluar = item.total_keluar || 0
-        const returKeluar = item.total_retur_keluar || 0
-        const adjustedKeluar = Math.max(0, keluar - returKeluar)
-        return sum + Math.max(0, masuk - adjustedKeluar)
-      }, 0),
+      // Backend sudah menghitung stock_saat_ini dengan benar (exclude retur keluar)
+      // Gunakan stock_saat_ini langsung dari backend untuk konsistensi
+      totalStockSaatIni: stockBalance.reduce((sum, item) => sum + (item.stock_saat_ini || 0), 0),
     }
   }, [stockBalance])
 
@@ -203,25 +193,25 @@ export default function InventoryDashboardPage() {
         <div className="bg-blue-50 p-4 sm:p-6 rounded-lg">
           <div className="text-xs sm:text-sm text-blue-600 font-medium">Total Barang Masuk</div>
           <div className="text-xl sm:text-2xl font-bold text-blue-900 mt-2">
-            {summaryTotals.totalMasuk}
+            {formatDecimal(summaryTotals.totalMasuk)}
           </div>
         </div>
         <div className="bg-red-50 p-4 sm:p-6 rounded-lg">
           <div className="text-xs sm:text-sm text-red-600 font-medium">Total Barang Keluar</div>
           <div className="text-xl sm:text-2xl font-bold text-red-900 mt-2">
-            {summaryTotals.totalKeluar}
+            {formatDecimal(summaryTotals.totalKeluar)}
           </div>
         </div>
         <div className="bg-yellow-50 p-4 sm:p-6 rounded-lg">
           <div className="text-xs sm:text-sm text-yellow-600 font-medium">Barang Terpasang</div>
           <div className="text-xl sm:text-2xl font-bold text-yellow-900 mt-2">
-            {summaryTotals.totalTerpasang}
+            {formatDecimal(summaryTotals.totalTerpasang)}
           </div>
         </div>
         <div className="bg-green-50 p-4 sm:p-6 rounded-lg">
           <div className="text-xs sm:text-sm text-green-600 font-medium">Stock Saat Ini</div>
           <div className="text-xl sm:text-2xl font-bold text-green-900 mt-2">
-            {summaryTotals.totalStockSaatIni}
+            {formatDecimal(summaryTotals.totalStockSaatIni)}
           </div>
         </div>
       </div>
@@ -363,9 +353,6 @@ export default function InventoryDashboardPage() {
                     Kembali
                   </th>
                   <th className="px-2 sm:px-3 md:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                    Retur Keluar
-                  </th>
-                  <th className="px-2 sm:px-3 md:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                     Kondisi Baik
                   </th>
                   <th className="px-2 sm:px-3 md:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
@@ -392,16 +379,13 @@ export default function InventoryDashboardPage() {
                       {formatDecimal(item.total_masuk)}
                     </td>
                     <td className="px-2 sm:px-3 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500">
-                      {formatDecimal(Math.max(0, (item.total_keluar || 0) - (item.total_retur_keluar || 0)))}
+                      {formatDecimal(item.total_keluar || 0)}
                     </td>
                     <td className="px-2 sm:px-3 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-yellow-600">
                       {formatDecimal(item.total_terpasang || 0)}
                     </td>
                     <td className="px-2 sm:px-3 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500">
                       {formatDecimal(item.total_kembali)}
-                    </td>
-                    <td className="px-2 sm:px-3 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-orange-600">
-                      {formatDecimal(item.total_retur_keluar ?? 0)}
                     </td>
                     <td className="px-2 sm:px-3 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-green-600">
                       {formatDecimal(item.total_kondisi_baik ?? 0)}

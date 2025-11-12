@@ -39,17 +39,28 @@ jobs:
             git checkout dev
             git reset --hard origin/dev
             
+            echo "🔍 Verifying environment files..."
+            if [ ! -f .env.dev ] || [ ! -f backend/.env.dev ]; then
+              echo "❌ Error: .env.dev files not found!"
+              echo "Please ensure .env.dev and backend/.env.dev exist on server"
+              exit 1
+            fi
+            echo "✅ Environment files found"
+            
             echo "🔨 Building Docker containers (development)..."
-            docker-compose -f docker-compose.dev.yml build --no-cache
+            docker-compose -f docker-compose.dev.yml --env-file .env.dev build --no-cache
             
             echo "🛑 Stopping containers..."
-            docker-compose -f docker-compose.dev.yml down
+            docker-compose -f docker-compose.dev.yml --env-file .env.dev down
             
             echo "🚀 Starting containers..."
-            docker-compose -f docker-compose.dev.yml up -d
+            docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d
             
             echo "⏳ Waiting for services to be ready..."
             sleep 30
+            
+            echo "📋 Checking container status..."
+            docker-compose -f docker-compose.dev.yml --env-file .env.dev ps
             
             echo "✅ Deployment completed!"
             echo "🌐 Frontend: https://devjargas.ptkiansantang.com"

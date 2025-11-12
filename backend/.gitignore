@@ -39,8 +39,9 @@ env/
 .env
 .env.local
 .env.*
-# Allow .env.example (template file)
+# Allow .env.example files (template files)
 !.env.example
+!.env.dev.example
 
 # Database
 *.db

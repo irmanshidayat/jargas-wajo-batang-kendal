@@ -320,6 +320,7 @@ class StockService:
         
         # Normalisasi quantity ke 2 desimal
         quantity_kembali = Decimal(str(quantity_kembali)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        # BEST PRACTICE: Simpan nilai persis seperti yang diinputkan, termasuk 0.00
         if quantity_kondisi_baik is not None:
             quantity_kondisi_baik = Decimal(str(quantity_kondisi_baik)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         if quantity_kondisi_reject is not None:
@@ -371,7 +372,9 @@ class StockService:
         # VALIDASI: Hitung batas maksimal barang kembali berbasis
         # Sisa Barang Kembali = Barang Keluar - Terpasang
         total_installed_for_stock_out = self.installed_repo.get_total_quantity_by_stock_out(stock_out_id)
-        max_return_allowed = max(0, (stock_out.quantity or 0) - (total_installed_for_stock_out or 0))
+        # Pastikan semua nilai menggunakan Decimal
+        stock_out_quantity = Decimal(str(stock_out.quantity)) if stock_out.quantity is not None else Decimal('0')
+        max_return_allowed = max(Decimal('0'), stock_out_quantity - total_installed_for_stock_out)
 
         # Hitung total quantity_kembali yang sudah ada untuk stock_out_id ini
         total_quantity_kembali_existing = self.return_repo.get_total_quantity_by_stock_out(stock_out_id)
@@ -386,7 +389,7 @@ class StockService:
                 f"Total terpasang: {total_installed_for_stock_out}. "
                 f"Maksimal bisa dikembalikan: {max_return_allowed}. "
                 f"Sudah dikembalikan: {total_quantity_kembali_existing}. "
-                f"Sisa yang bisa dikembalikan: {max(0, available_quantity)}. "
+                f"Sisa yang bisa dikembalikan: {max(Decimal('0'), available_quantity)}. "
                 f"Anda mencoba mengembalikan: {quantity_kembali}."
             )
         
@@ -407,12 +410,14 @@ class StockService:
                 )
         
         # Create return
+        # BEST PRACTICE: Simpan nilai persis seperti yang diinputkan, tidak ada pengurangan atau perubahan
         return_data = {
             "mandor_id": mandor_id,
             "material_id": material_id,
             "quantity_kembali": quantity_kembali,
-            "quantity_kondisi_baik": quantity_kondisi_baik or 0,
-            "quantity_kondisi_reject": quantity_kondisi_reject or 0,
+            # Simpan nilai persis: jika None tetap None (akan jadi NULL di DB), jika ada nilai (termasuk 0.00) simpan persis
+            "quantity_kondisi_baik": quantity_kondisi_baik if quantity_kondisi_baik is not None else None,
+            "quantity_kondisi_reject": quantity_kondisi_reject if quantity_kondisi_reject is not None else None,
             "stock_out_id": stock_out_id,
             "tanggal_kembali": tanggal_kembali,
             # Hindari konversi ganda; route akan update evidence_paths setelah ID diketahui
@@ -509,24 +514,54 @@ class StockService:
                 installed_items = self.installed_repo.get_all_by_project(skip=0, limit=10000, project_id=project_id)
                 installed_items = self._filter_by_material_and_not_deleted(installed_items, material.id)
             
-            # Get returns yang sudah dikeluarkan kembali (is_released = 1) untuk retur keluar
-            # Filter dari returns yang sudah diambil sebelumnya
+            # Get returns yang sudah dikeluarkan kembali (is_released = 1)
             returns_released = [r for r in returns if getattr(r, 'is_released', 0) == 1]
+            # Get returns yang BELUM dikeluarkan lagi (is_released = 0)
+            returns_not_released = [r for r in returns if getattr(r, 'is_released', 0) == 0]
+            
+            # PENTING: Filter stock_out yang berasal dari retur keluar
+            # Stock out dari retur keluar TIDAK mengurangi stok karena sudah pernah masuk ke gudang sebagai return
+            # Identifikasi stock_out dari retur keluar: ada Return dengan stock_out_id = stock_out.id dan is_released = 1
+            stock_out_ids_from_return = {r.stock_out_id for r in returns_released if r.stock_out_id is not None}
+            stock_outs_excluding_return = [so for so in stock_outs if so.id not in stock_out_ids_from_return]
             
             total_in = sum(si.quantity for si in stock_ins)
-            total_out = sum(so.quantity for so in stock_outs)
-            total_return = sum(r.quantity_kembali for r in returns)
-            total_retur_keluar = sum(r.quantity_kembali for r in returns_released)
+            # Hanya hitung stock_out yang BUKAN dari retur keluar
+            total_out = sum(so.quantity for so in stock_outs_excluding_return)
+            
+            # BEST PRACTICE: Perhitungan total_kembali
+            # total_kembali = semua quantity_kembali - kondisi baik yang sudah dikeluarkan
+            # Karena hanya kondisi baik yang dikeluarkan, kondisi reject tetap di gudang
+            total_quantity_kembali_all = sum(r.quantity_kembali for r in returns)
+            total_kondisi_baik_released = sum((r.quantity_kondisi_baik or 0) for r in returns_released)
+            total_return = total_quantity_kembali_all - total_kondisi_baik_released
+            
             total_terpasang = sum(i.quantity for i in installed_items)
-            total_kondisi_baik = sum((r.quantity_kondisi_baik or 0) for r in returns)
+            
+            # BEST PRACTICE: Kondisi baik hanya dari return yang BELUM dikeluarkan lagi
+            # Return yang sudah dikeluarkan lagi, kondisi baiknya sudah dikeluarkan
+            total_kondisi_baik = sum((r.quantity_kondisi_baik or 0) for r in returns_not_released)
+            
+            # BEST PRACTICE: Kondisi reject dari SEMUA return (termasuk yang is_released=1)
+            # Karena kondisi reject TIDAK ikut dikeluarkan, tetap di gudang dan tetap terhitung
             total_kondisi_reject = sum((r.quantity_kondisi_reject or 0) for r in returns)
             
-            # Rumus Stock Balance yang Dinamis & Best Practice
-            # Keluar Efektif = Keluar - Retur Keluar (retur keluar mengurangi efek keluar karena sudah kembali ke gudang)
-            keluar_efektif = total_out - total_retur_keluar
-            # Stock Saat Ini = Masuk - Keluar Efektif + Kembali
-            current_stock = total_in - keluar_efektif + total_return
+            # BEST PRACTICE: Rumus Stock Balance yang menghindari double counting
+            # Alur bisnis:
+            # 1. Masuk: Barang masuk ke gudang (+)
+            # 2. Keluar: Barang keluar dari gudang (-), TIDAK termasuk retur keluar
+            # 3. Kembali: Barang dikembalikan ke gudang (+) - HANYA yang BELUM dikeluarkan lagi
+            # 4. Terpasang: Barang yang sudah terpasang di lapangan (-)
+            #
+            # Stock Saat Ini = Masuk - Terpasang
+            # Penjelasan:
+            # - Stock Saat Ini adalah sisa barang yang masih ada di gudang
+            # - Barang yang sudah terpasang tidak lagi ada di gudang, jadi dikurangi
+            # - "Kembali" dan "Keluar" sudah tercermin dalam perhitungan terpasang
+            current_stock = total_in - total_terpasang
+            
             # Stok Ready = Stock Saat Ini - Kondisi Reject (barang reject tidak bisa dikeluarkan)
+            # Kondisi reject hanya dari return yang belum dikeluarkan lagi
             stock_ready = max(0, current_stock - total_kondisi_reject)
             
             balance_data.append({
@@ -538,7 +573,6 @@ class StockService:
                 "total_keluar": total_out,
                 "total_terpasang": total_terpasang,
                 "total_kembali": total_return,
-                "total_retur_keluar": total_retur_keluar,
                 "total_kondisi_baik": total_kondisi_baik,
                 "total_kondisi_reject": total_kondisi_reject,
                 "stock_ready": stock_ready,
@@ -626,7 +660,7 @@ class StockService:
     ):
         """Create stock out from an existing return and mark it released.
 
-        Uses the full quantity_kembali, same mandor_id and material_id.
+        Hanya quantity_kondisi_baik yang dikeluarkan, quantity_kondisi_reject tetap di gudang.
         """
         # Get return
         ret = self.return_repo.get(return_id, project_id=project_id)
@@ -644,6 +678,11 @@ class StockService:
         if ret.quantity_kembali <= 0:
             raise ValidationError("Quantity kembali pada return tidak valid")
 
+        # Validasi: Hanya kondisi baik yang bisa dikeluarkan
+        quantity_kondisi_baik = ret.quantity_kondisi_baik or 0
+        if quantity_kondisi_baik <= 0:
+            raise ValidationError("Quantity kondisi baik harus lebih dari 0 untuk dapat dikeluarkan kembali. Kondisi reject tidak ikut dikeluarkan.")
+
         # Use project_id from return if not provided
         if project_id is None:
             project_id = ret.project_id
@@ -654,12 +693,13 @@ class StockService:
         nomor_barang_keluar = f"JRGS-KDL-{date_str}-{next_num:04d}"
 
         # Create stock out from return with retry mechanism
+        # PENTING: Hanya quantity_kondisi_baik yang dikeluarkan, bukan quantity_kembali
         stock_out_data = {
             "project_id": project_id,
             "nomor_barang_keluar": nomor_barang_keluar,
             "mandor_id": ret.mandor_id,
             "material_id": ret.material_id,
-            "quantity": ret.quantity_kembali,
+            "quantity": quantity_kondisi_baik,  # Hanya kondisi baik yang dikeluarkan
             "tanggal_keluar": tanggal_keluar,
             "evidence_paths": save_evidence_paths_to_db(evidence_paths),
             "created_by": created_by,
@@ -669,6 +709,7 @@ class StockService:
         stock_out = self._create_stock_out_with_retry(stock_out_data, tanggal_keluar)
 
         # Update return: set stock_out_id and is_released=1
+        # PENTING: quantity_kondisi_reject tetap di database dan tetap terhitung di stock balance
         self.return_repo.update(ret.id, {
             "stock_out_id": stock_out.id,
             "is_released": 1

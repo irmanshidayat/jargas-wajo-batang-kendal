@@ -26,6 +26,22 @@ export const formatDecimal = (value: number | string | null | undefined): string
 }
 
 /**
+ * Format number to decimal string with 1 decimal place
+ * @param value Number or string value to format
+ * @returns Formatted string with 1 decimal place (e.g., "1.2", "1.0")
+ */
+export const formatDecimalOne = (value: number | string | null | undefined): string => {
+  if (value === null || value === undefined || value === '') {
+    return '-'
+  }
+  const numValue = typeof value === 'string' ? parseFloat(value) : value
+  if (isNaN(numValue)) {
+    return '-'
+  }
+  return numValue.toFixed(1)
+}
+
+/**
  * Check if error is a canceled request error
  * @param error Error object to check
  * @returns true if error is a canceled request, false otherwise

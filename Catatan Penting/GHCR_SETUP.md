@@ -110,7 +110,7 @@ echo $GITHUB_TOKEN | docker login ghcr.io -u $GITHUB_USERNAME --password-stdin
 ```
 
 # Jalankan script
-.\scripts\push-to-ghcr.ps1 -GitHubUsername $GITHUB_USERNAME -GitHubToken $GITHUB_TOKEN -Version "latest"
+.\scripts\active\push-to-ghcr.ps1 -GitHubUsername $GITHUB_USERNAME -GitHubToken $GITHUB_TOKEN -Version "latest"
 
 # untuk lihat berhasil push atau tidak disini
 https://github.com/irmanshidayat?tab=packages
@@ -432,7 +432,7 @@ Write-Host "Done! Images pushed to GHCR." -ForegroundColor Green
 
 ```powershell
 # Dari root project
-.\scripts\push-to-ghcr.ps1 -GitHubUsername "your-username" -GitHubToken "your-token" -Version "v1.0.0"
+.\scripts\active\push-to-ghcr.ps1 -GitHubUsername "your-username" -GitHubToken "your-token" -Version "v1.0.0"
 ```
 
 ---

@@ -36,19 +36,31 @@ jobs:
             
             echo "📥 Pulling latest code from main branch..."
             git fetch origin
+            git checkout main
             git reset --hard origin/main
             
-            echo "🔨 Building Docker containers..."
-            docker-compose build --no-cache
+            echo "🔍 Verifying environment files..."
+            if [ ! -f .env ] || [ ! -f backend/.env ]; then
+              echo "❌ Error: .env files not found!"
+              echo "Please ensure .env and backend/.env exist on server"
+              exit 1
+            fi
+            echo "✅ Environment files found"
+            
+            echo "🔨 Building Docker containers (production)..."
+            docker-compose --env-file .env build --no-cache
             
             echo "🛑 Stopping containers..."
-            docker-compose down
+            docker-compose --env-file .env down
             
             echo "🚀 Starting containers..."
-            docker-compose up -d
+            docker-compose --env-file .env up -d
             
             echo "⏳ Waiting for services to be ready..."
             sleep 30
+            
+            echo "📋 Checking container status..."
+            docker-compose --env-file .env ps
             
             echo "✅ Deployment completed!"
             echo "🌐 Frontend: https://jargas.ptkiansantang.com"

@@ -4,7 +4,7 @@ import { inventoryService, Material, Mandor, StockOut } from '../services/invent
 import { extractItems } from '@/utils/api'
 import EvidenceUpload from '../components/EvidenceUpload'
 import Swal from 'sweetalert2'
-import { getTodayDate, formatDecimal } from '@/utils/helpers'
+import { getTodayDate, formatDecimal, formatDecimalOne, isCanceledError } from '@/utils/helpers'
 import {
   validateQuantity,
   parseQuantityWithFlag,
@@ -65,38 +65,57 @@ export default function ReturnsPage() {
 
   // Auto-fill items ketika nomor barang keluar dipilih
   useEffect(() => {
-    // Ambil semua stock out yang dipilih (non-empty) - gunakan map untuk performa lebih baik
-    const selectedStockOuts = stockOutRows
+    // Skip jika stockOuts belum ter-load
+    if (stockOuts.length === 0) {
+      return
+    }
+
+    // Ambil semua stock out yang dipilih (non-empty)
+    const selectedNomors = stockOutRows
       .map(row => row.nomor_barang_keluar)
       .filter(nomor => nomor !== '')
-      .map(nomor => stockOutByNomorMap.get(nomor))
-      .filter((so): so is StockOut => so !== undefined)
     
-    if (selectedStockOuts.length > 0) {
-      // Auto-fill items dengan material dan quantity dari semua stock out yang dipilih
-      const autoFilledItems = selectedStockOuts.map(selectedStockOut => {
-        const sisaInfo = computeStockOutSisa(selectedStockOut)
-        
-        if (selectedStockOut.material_id && sisaInfo.quantity_sisa_kembali > 0) {
-          return {
-            material_id: selectedStockOut.material_id.toString(),
-            quantity_kembali: sisaInfo.quantity_sisa_kembali.toString(),
-            quantity_kondisi_baik: '',
-            quantity_kondisi_reject: ''
-          }
-        } else {
-          return {
-            material_id: selectedStockOut.material_id?.toString() || '',
-            quantity_kembali: '',
-            quantity_kondisi_baik: '',
-            quantity_kondisi_reject: ''
-          }
-        }
-      })
+    if (selectedNomors.length > 0) {
+      // Cari stock out yang sesuai dari stockOuts array
+      const selectedStockOuts = selectedNomors
+        .map(nomor => stockOuts.find(so => so.nomor_barang_keluar === nomor))
+        .filter((so): so is StockOut => so !== undefined)
       
-      // Auto-fill hanya jika belum ada manual edit
-      if (!isManualEditRef.current) {
-        setItems(autoFilledItems.length > 0 ? autoFilledItems : [{ material_id: '', quantity_kembali: '', quantity_kondisi_baik: '', quantity_kondisi_reject: '' }])
+      if (selectedStockOuts.length > 0) {
+        // BEST PRACTICE: Auto-fill selalu menggunakan quantity_sisa_kembali (sisa yang bisa dikembalikan)
+        // Bukan menggunakan totalInstalledQuantity karena itu adalah total terpasang, bukan sisa
+        const autoFilledItems = selectedStockOuts.map(selectedStockOut => {
+          // Hitung sisa yang bisa dikembalikan menggunakan helper function
+          const sisaInfo = computeStockOutSisa(selectedStockOut)
+          
+          if (selectedStockOut.material_id && sisaInfo.quantity_sisa_kembali > 0) {
+            // Format dengan 1 desimal untuk konsistensi
+            // Gunakan quantity_sisa_kembali (sisa yang bisa dikembalikan) untuk auto-fill
+            const formattedQuantity = formatDecimalOne(sisaInfo.quantity_sisa_kembali)
+            
+            return {
+              material_id: selectedStockOut.material_id.toString(),
+              quantity_kembali: formattedQuantity,
+              quantity_kondisi_baik: '',
+              quantity_kondisi_reject: ''
+            }
+          } else {
+            return {
+              material_id: selectedStockOut.material_id?.toString() || '',
+              quantity_kembali: '',
+              quantity_kondisi_baik: '',
+              quantity_kondisi_reject: ''
+            }
+          }
+        })
+        
+        // Auto-fill items - selalu update jika ada stock out yang dipilih
+        // Reset manual edit flag ketika nomor barang keluar baru dipilih (bukan dari manual edit)
+        if (autoFilledItems.length > 0) {
+          setItems(autoFilledItems)
+          // Reset manual edit flag karena ini adalah auto-fill dari pilihan stock out
+          isManualEditRef.current = false
+        }
       }
     } else {
       // Reset items hanya jika semua nomor barang keluar di-reset DAN belum ada manual edit
@@ -106,9 +125,9 @@ export default function ReturnsPage() {
         }
       }
     }
-  }, [stockOutRows, stockOutByNomorMap])
+  }, [stockOutRows, stockOuts])
 
-  // Reset manual edit flag ketika stock out rows di-reset
+  // Reset manual edit flag ketika stock out rows di-reset atau mandor berubah
   useEffect(() => {
     if (stockOutRows.every(row => row.nomor_barang_keluar === '')) {
       isManualEditRef.current = false
@@ -122,6 +141,11 @@ export default function ReturnsPage() {
       const items = extractItems<StockOut>(response)
       setStockOuts(items)
     } catch (error: any) {
+      // Skip CanceledError - ini expected behavior saat cancel duplicate request
+      if (isCanceledError(error)) {
+        return
+      }
+      console.error('Error loading stock outs:', error)
       Swal.fire({
         icon: 'error',
         title: 'Error',
@@ -138,23 +162,34 @@ export default function ReturnsPage() {
       const response = await inventoryService.getMaterials(1, 1000)
       setMaterials(extractItems<Material>(response))
     } catch (error: any) {
+      // Skip CanceledError - ini expected behavior saat cancel duplicate request
+      if (isCanceledError(error)) {
+        return
+      }
+      console.error('Error loading materials:', error)
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: 'Gagal memuat data materials',
+        text: error?.response?.data?.detail || 'Gagal memuat data materials',
       })
     }
   }
 
   const loadMandors = async () => {
     try {
+      // getMandors sudah menggunakan extractPaginatedResponse, jadi response sudah dalam format PaginatedResponse
       const response = await inventoryService.getMandors(1, 1000)
-      setMandors(extractItems<Mandor>(response))
+      setMandors(response.data || [])
     } catch (error: any) {
+      // Skip CanceledError - ini expected behavior saat cancel duplicate request
+      if (isCanceledError(error)) {
+        return
+      }
+      console.error('Error loading mandors:', error)
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: 'Gagal memuat data mandors',
+        text: error?.response?.data?.detail || 'Gagal memuat data mandors',
       })
     }
   }
@@ -456,6 +491,11 @@ export default function ReturnsPage() {
                             i === idx ? { ...r, nomor_barang_keluar: e.target.value } : r
                           )
                           setStockOutRows(newRows)
+                          // Reset manual edit flag ketika user memilih nomor barang keluar baru
+                          // Ini memastikan auto-fill akan bekerja
+                          if (e.target.value !== '') {
+                            isManualEditRef.current = false
+                          }
                         }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                         disabled={!formData.mandor_id || loadingStockOuts}
@@ -490,11 +530,19 @@ export default function ReturnsPage() {
                           <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
                             <p className="text-xs text-blue-700">
                               Material: <strong>{info.materialName}</strong>
-                              {' | '}Qty: <strong>{formatDecimal(info.quantity)}</strong>
-                              {' | '}Terpasang: <strong>{formatDecimal(info.quantity_terpasang)}</strong>
-                              {' | '}Sisa: <strong className="text-green-700">{formatDecimal(info.quantity_sisa_kembali)}</strong>
-                              {' | '}Sudah kembali: <strong>{formatDecimal(info.quantity_sudah_kembali)}</strong>
+                              {' | '}Qty: <strong>{formatDecimalOne(info.quantity)}</strong>
+                              {' | '}Terpasang: <strong>{formatDecimalOne(info.quantity_terpasang)}</strong>
+                              {' | '}Sisa: <strong className="text-green-700">{formatDecimalOne(info.quantity_sisa_total)}</strong>
+                              {' | '}Sudah kembali: <strong>{formatDecimalOne(info.quantity_sudah_kembali)}</strong>
+                              {info.quantity_reject !== undefined && info.quantity_reject > 0 && (
+                                <> {' | '}Reject: <strong className="text-red-600">{formatDecimalOne(info.quantity_reject)}</strong></>
+                              )}
                             </p>
+                            {info.quantity_sisa_kembali < info.quantity_sisa_total && (
+                              <p className="text-xs text-amber-700 mt-1">
+                                <strong>Maksimal bisa dikembalikan: {formatDecimalOne(info.quantity_sisa_kembali)}</strong>
+                              </p>
+                            )}
                           </div>
                         )
                       })()}
@@ -596,7 +644,7 @@ export default function ReturnsPage() {
                       type="number"
                       step="0.01"
                       min="0.01"
-                      max={sisaInfo?.quantity_sisa_kembali}
+                      max={sisaInfo?.quantity_sisa_kembali !== undefined ? parseFloat(formatDecimalOne(sisaInfo.quantity_sisa_kembali)) : undefined}
                       value={row.quantity_kembali}
                       onChange={(e) => {
                         const v = e.target.value
@@ -609,7 +657,7 @@ export default function ReturnsPage() {
                       placeholder="Qty"
                       title={
                         isAutoFilled && sisaInfo
-                          ? `Maksimal: ${sisaInfo.quantity_sisa_kembali} (sisa yang bisa dikembalikan)`
+                          ? `Maksimal: ${formatDecimalOne(sisaInfo.quantity_sisa_kembali)} (sisa yang bisa dikembalikan)`
                           : ''
                       }
                     />

@@ -1,41 +1,55 @@
 import { StockOut } from '../services/inventoryService'
+import { formatDecimalOne } from '@/utils/helpers'
 
 /**
  * Interface untuk informasi sisa barang kembali
+ * BEST PRACTICE: Struktur yang jelas dan konsisten
  */
 export interface StockOutSisaInfo {
-  quantity_terpasang: number
-  quantity_sisa_kembali: number
-  quantity_sudah_kembali: number
+  quantity_terpasang: number  // Total yang sudah terpasang
+  quantity_sisa_total: number  // Sisa total (Qty - Terpasang) - untuk informasi
+  quantity_sisa_kembali: number  // Sisa bisa kembali (Qty - Terpasang - Sudah Kembali) - untuk validasi
+  quantity_sudah_kembali: number  // Total yang sudah dikembalikan
+  quantity_reject?: number  // Total reject (opsional, untuk informasi)
 }
 
 /**
  * Hitung informasi sisa barang kembali berdasarkan stock out
- * Rumus: Sisa = Qty Keluar - Qty Terpasang
+ * BEST PRACTICE: Menggunakan data dari backend jika tersedia, fallback ke perhitungan manual
  * 
  * @param stockOut Stock out object dari API
- * @returns Object dengan quantity_terpasang, quantity_sisa_kembali, dan quantity_sudah_kembali
+ * @returns Object dengan informasi sisa yang lengkap
  */
 export const computeStockOutSisa = (stockOut: StockOut): StockOutSisaInfo => {
-  // Prioritaskan quantity_terpasang dari backend jika ada
-  const quantity_terpasang = (stockOut as any).quantity_terpasang ?? 0
+  // Prioritaskan data dari backend jika ada
+  const quantity_terpasang = stockOut.quantity_terpasang ?? 0
+  const quantity_sudah_kembali = stockOut.quantity_sudah_kembali ?? 0
+  const quantity_reject = stockOut.quantity_reject
   
-  // Prioritaskan quantity_sisa_kembali dari backend, fallback ke perhitungan manual
-  let quantity_sisa_kembali: number
-  if ((stockOut as any).quantity_sisa_kembali !== undefined) {
-    quantity_sisa_kembali = (stockOut as any).quantity_sisa_kembali
+  // BEST PRACTICE: Gunakan quantity_sisa_total dari backend jika ada
+  let quantity_sisa_total: number
+  if (stockOut.quantity_sisa_total !== undefined) {
+    quantity_sisa_total = stockOut.quantity_sisa_total
   } else {
     // Fallback: hitung manual (Qty Keluar - Qty Terpasang)
-    quantity_sisa_kembali = Math.max(0, (stockOut.quantity ?? 0) - quantity_terpasang)
+    quantity_sisa_total = Math.max(0, (stockOut.quantity ?? 0) - quantity_terpasang)
   }
   
-  // Quantity sudah kembali (informasi saja)
-  const quantity_sudah_kembali = (stockOut as any).quantity_sudah_kembali ?? 0
+  // BEST PRACTICE: Gunakan quantity_sisa_kembali dari backend jika ada
+  let quantity_sisa_kembali: number
+  if (stockOut.quantity_sisa_kembali !== undefined) {
+    quantity_sisa_kembali = stockOut.quantity_sisa_kembali
+  } else {
+    // Fallback: hitung manual (Qty Keluar - Qty Terpasang - Sudah Kembali)
+    quantity_sisa_kembali = Math.max(0, (stockOut.quantity ?? 0) - quantity_terpasang - quantity_sudah_kembali)
+  }
   
   return {
-    quantity_terpasang,
-    quantity_sisa_kembali: Math.max(0, quantity_sisa_kembali), // Pastikan tidak negatif
+    quantity_terpasang: Math.max(0, quantity_terpasang),
+    quantity_sisa_total: Math.max(0, quantity_sisa_total),
+    quantity_sisa_kembali: Math.max(0, quantity_sisa_kembali),
     quantity_sudah_kembali: Math.max(0, quantity_sudah_kembali),
+    ...(quantity_reject !== undefined && { quantity_reject: Math.max(0, quantity_reject) }),
   }
 }
 
@@ -50,7 +64,7 @@ export const formatStockOutOptionLabel = (stockOut: StockOut): string => {
   const materialName = stockOut.material?.nama_barang || `Material ID: ${stockOut.material_id}`
   const isFull = sisaInfo.quantity_sisa_kembali <= 0
   
-  return `${stockOut.nomor_barang_keluar} - ${materialName} (Qty: ${stockOut.quantity}, Sudah kembali: ${sisaInfo.quantity_sudah_kembali}, Sisa: ${sisaInfo.quantity_sisa_kembali})${isFull ? ' (Sudah penuh)' : ''}`
+  return `${stockOut.nomor_barang_keluar} - ${materialName} (Qty: ${formatDecimalOne(stockOut.quantity)}, Terpasang: ${formatDecimalOne(sisaInfo.quantity_terpasang)}, Sisa: ${formatDecimalOne(sisaInfo.quantity_sisa_total)}, Sudah kembali: ${formatDecimalOne(sisaInfo.quantity_sudah_kembali)}, Bisa kembali: ${formatDecimalOne(sisaInfo.quantity_sisa_kembali)})${isFull ? ' (Sudah penuh)' : ''}`
 }
 
 /**
@@ -67,8 +81,10 @@ export const formatStockOutInfoCard = (stockOut: StockOut) => {
     materialName,
     quantity: stockOut.quantity,
     quantity_terpasang: sisaInfo.quantity_terpasang,
-    quantity_sisa_kembali: sisaInfo.quantity_sisa_kembali,
+    quantity_sisa_total: sisaInfo.quantity_sisa_total,  // Sisa total (Qty - Terpasang)
+    quantity_sisa_kembali: sisaInfo.quantity_sisa_kembali,  // Sisa bisa kembali (untuk validasi)
     quantity_sudah_kembali: sisaInfo.quantity_sudah_kembali,
+    quantity_reject: sisaInfo.quantity_reject,
   }
 }
 

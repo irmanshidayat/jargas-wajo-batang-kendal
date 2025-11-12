@@ -72,13 +72,40 @@ class BaseRepository(Generic[ModelType]):
             db_obj = self.model(**obj_data)
             self.db.add(db_obj)
             self.db.commit()
-            # Refresh bisa gagal bila skema DB belum sepenuhnya sinkron.
+            # Refresh bisa gagal bila skema DB belum sepenuhnya sinkron atau ada masalah dengan enum.
             # Jangan gagalkan operasi create jika refresh gagal.
             try:
                 self.db.refresh(db_obj)
-            except SQLAlchemyError:
+            except (SQLAlchemyError, LookupError, KeyError, ValueError) as e:
+                # Handle LookupError yang terjadi saat enum tidak cocok (misalnya 'create' vs 'CREATE')
+                # Juga handle ValueError yang mungkin terjadi saat enum tidak valid
+                error_msg = str(e)
+                if 'enum' in error_msg.lower() or 'lookup' in error_msg.lower() or 'not among the defined enum values' in error_msg:
+                    self.logger.warning(
+                        f"Refresh failed for {self.model.__name__} due to enum mismatch (non-critical): {error_msg}. "
+                        f"Object was created successfully with ID: {getattr(db_obj, 'id', 'N/A')}"
+                    )
+                else:
+                    self.logger.warning(f"Refresh failed for {self.model.__name__} (non-critical): {error_msg}")
+                # Jangan raise error, karena create sudah berhasil
                 pass
-            self.logger.debug(f"Successfully created {self.model.__name__} with ID: {getattr(db_obj, 'id', 'N/A')}")
+            except Exception as e:
+                # Catch-all untuk error lainnya saat refresh
+                self.logger.warning(f"Refresh failed for {self.model.__name__} (non-critical): {str(e)}")
+                pass
+            
+            # Akses ID tanpa memicu refresh ulang
+            obj_id = None
+            try:
+                obj_id = db_obj.id
+            except (LookupError, AttributeError, KeyError):
+                # Jika akses id memicu error enum, gunakan alternatif
+                try:
+                    obj_id = getattr(db_obj, 'id', None)
+                except Exception:
+                    obj_id = 'N/A'
+            
+            self.logger.debug(f"Successfully created {self.model.__name__} with ID: {obj_id}")
             return db_obj
         except IntegrityError as e:
             self.db.rollback()

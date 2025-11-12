@@ -7,7 +7,7 @@ class Installed(BaseModel):
     __tablename__ = "installed"
 
     material_id = Column(Integer, ForeignKey("materials.id"), nullable=False, index=True)
-    quantity = Column(Numeric(10, 2), nullable=False)
+    quantity = Column(Numeric(10, 1), nullable=False)
     tanggal_pasang = Column(Date, nullable=False, index=True)
     mandor_id = Column(Integer, ForeignKey("mandors.id"), nullable=False, index=True)
     stock_out_id = Column(Integer, ForeignKey("stock_outs.id"), nullable=True, index=True)
