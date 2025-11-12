@@ -28,9 +28,21 @@ jobs:
         run: |
           ssh-keyscan -H ${{ env.SERVER_IP }} >> ~/.ssh/known_hosts
 
+      - name: Test SSH Connection
+        run: |
+          echo "🔍 Testing SSH connection..."
+          ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} 'echo "✅ SSH connection successful!"' || {
+            echo "❌ SSH connection failed!"
+            echo "Please verify:"
+            echo "1. Public key is added to server ~/.ssh/authorized_keys"
+            echo "2. SSH_PRIVATE_KEY secret is correctly configured in GitHub"
+            echo "3. Server is accessible: ${{ env.SERVER_IP }}"
+            exit 1
+          }
+
       - name: Deploy to Development Server
         run: |
-          ssh ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} << 'EOF'
             set -e
             cd ${{ env.PROJECT_PATH }}
             

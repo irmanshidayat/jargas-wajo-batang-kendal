@@ -160,8 +160,26 @@ ssh-keygen -t ed25519 -C "github-actions" -f ~/.ssh/github_actions
 ```
 
 2. **Copy Public Key ke Server:**
+
+**Opsi 1: Menggunakan Script PowerShell (Recommended):**
+```powershell
+.\scripts\active\setup-github-actions-ssh.ps1
+```
+
+**Opsi 2: Manual dengan ssh-copy-id:**
 ```bash
 ssh-copy-id -i ~/.ssh/github_actions.pub root@72.61.142.109
+```
+
+**Opsi 3: Manual copy (jika ssh-copy-id tidak tersedia):**
+```powershell
+# Di Windows PowerShell
+Get-Content "$env:USERPROFILE\.ssh\github_actions.pub" | ssh root@72.61.142.109 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+```
+
+**Verifikasi:**
+```bash
+ssh root@72.61.142.109 "cat ~/.ssh/authorized_keys | grep github-actions"
 ```
 
 3. **Tambah Private Key ke GitHub Secrets:**
@@ -201,8 +219,27 @@ ssh-copy-id -i ~/.ssh/github_actions.pub root@72.61.142.109
   4. Jika sudah ada, cek apakah value-nya benar (harus termasuk BEGIN dan END lines)
   5. Setelah update secret, jalankan ulang workflow: Actions → Deploy Development → Run workflow
 
+**Error: "Process completed with exit code 255"**
+- ❌ **Penyebab**: SSH connection gagal, biasanya karena public key belum di-copy ke server
+- ✅ **Solusi**:
+  1. Jalankan script setup SSH: `.\scripts\active\setup-github-actions-ssh.ps1`
+  2. Atau manual copy public key ke server:
+     ```powershell
+     # Di Windows PowerShell
+     Get-Content "$env:USERPROFILE\.ssh\github_actions.pub" | ssh root@72.61.142.109 "cat >> ~/.ssh/authorized_keys"
+     ```
+  3. Verifikasi public key sudah ada di server:
+     ```bash
+     ssh root@72.61.142.109 "cat ~/.ssh/authorized_keys | grep github-actions"
+     ```
+  4. Test SSH connection:
+     ```powershell
+     ssh -i "$env:USERPROFILE\.ssh\github_actions" root@72.61.142.109 "echo 'SSH OK'"
+     ```
+
 **Error: "Permission denied"**
 - Verifikasi SSH key sudah di-copy ke server dengan: `ssh-copy-id -i ~/.ssh/github_actions.pub root@72.61.142.109`
+- Atau gunakan script: `.\scripts\active\setup-github-actions-ssh.ps1`
 - Cek GitHub Secret `SSH_PRIVATE_KEY` sudah benar
 - Test SSH connection: `ssh -i ~/.ssh/github_actions root@72.61.142.109`
 
