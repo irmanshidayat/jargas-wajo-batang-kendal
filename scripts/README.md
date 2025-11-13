@@ -50,11 +50,6 @@ Script PowerShell untuk deployment **PRODUCTION** lengkap dengan auto-migration 
 
 ---
 
-#### `deploy-with-migration.ps1` (Legacy)
-Script PowerShell untuk deployment production (legacy, gunakan `deploy-production.ps1`).
-
-**Catatan:** Script ini sudah di-update untuk menggunakan `--env-file .env`, tapi disarankan menggunakan `deploy-production.ps1` yang lebih lengkap.
-
 ---
 
 #### `deploy-dev.ps1`
@@ -287,14 +282,14 @@ Jika Anda menggunakan script dari dokumentasi lama, update path-nya:
 
 **Sesudah:**
 ```powershell
-.\scripts\active\deploy-with-migration.ps1
+.\scripts\active\deploy-production.ps1
 ```
 
 **Atau buat symlink/alias untuk kemudahan:**
 ```powershell
 # Di PowerShell profile
 function Deploy-Production {
-    .\scripts\active\deploy-with-migration.ps1 @args
+    .\scripts\active\deploy-production.ps1 @args
 }
 
 function Deploy-Dev {
