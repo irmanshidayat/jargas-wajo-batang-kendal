@@ -182,7 +182,8 @@ RUN for i in 1 2 3 4 5; do \
 
 # Install pip untuk Python 3.11
 RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 && \
-    python3.11 -m pip install --upgrade pip setuptools wheel
+    python3.11 -m pip install --upgrade pip setuptools wheel && \
+    ln -sf /usr/bin/python3.11 /usr/bin/python
 
 # Copy Python dependencies dari builder
 COPY --from=builder /root/.local /root/.local
