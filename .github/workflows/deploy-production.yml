@@ -241,12 +241,46 @@ jobs:
             PYTHON_VERSION=$(python3 --version)
             echo "✅ Found: $PYTHON_VERSION"
             
+            # Install required system packages for Python venv
+            echo "Installing required system packages..."
+            if command -v apt-get &> /dev/null; then
+              # Debian/Ubuntu
+              apt-get update -qq > /dev/null 2>&1
+              apt-get install -y -qq python3-venv python3-pip python3-dev build-essential > /dev/null 2>&1 || {
+                echo "⚠️  Warning: Some packages may not have installed (non-fatal)"
+              }
+              echo "✅ System packages installed/verified"
+            elif command -v yum &> /dev/null; then
+              # CentOS/RHEL
+              yum install -y -q python3-venv python3-pip python3-devel gcc > /dev/null 2>&1 || {
+                echo "⚠️  Warning: Some packages may not have installed (non-fatal)"
+              }
+              echo "✅ System packages installed/verified"
+            else
+              echo "⚠️  Warning: Package manager not detected, skipping system package installation"
+            fi
+            
             # Setup virtual environment
             if [ ! -d "venv" ]; then
               echo "Creating virtual environment..."
               python3 -m venv venv || {
                 echo "❌ Error: Cannot create virtual environment"
-                exit 1
+                echo "Trying alternative method..."
+                # Try with --without-pip if ensurepip is not available
+                python3 -m venv --without-pip venv || {
+                  echo "❌ Error: Cannot create virtual environment even with --without-pip"
+                  echo "Please ensure python3-venv package is installed on the server"
+                  exit 1
+                }
+                echo "✅ Virtual environment created (without pip)"
+                # Install pip manually
+                source venv/bin/activate
+                curl -sS https://bootstrap.pypa.io/get-pip.py | python3 || {
+                  echo "❌ Error: Cannot install pip"
+                  exit 1
+                }
+                deactivate
+                echo "✅ Pip installed in virtual environment"
               }
               echo "✅ Virtual environment created"
             else
