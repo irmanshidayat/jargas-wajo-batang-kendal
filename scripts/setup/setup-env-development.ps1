@@ -50,9 +50,9 @@ DEBUG=True
 # ============================================
 # Format: comma-separated tanpa spasi
 # Development: domain development, frontend Docker, dan dev server
-# Frontend Docker default: http://localhost:8080
+# Frontend Docker: http://localhost:8910 (sesuai standar deployment)
 # Vite dev server default: http://localhost:5173
-CORS_ORIGINS=https://devjargas.ptkiansantang.com,http://localhost:8080,http://localhost:5173,http://localhost:3000
+CORS_ORIGINS=https://devjargas.ptkiansantang.com,http://localhost:8910,http://localhost:5173,http://localhost:3000
 
 # ============================================
 # FRONTEND DOCKER CONFIGURATION (Optional)
@@ -60,7 +60,7 @@ CORS_ORIGINS=https://devjargas.ptkiansantang.com,http://localhost:8080,http://lo
 # Port untuk frontend Docker container (jika menggunakan Docker)
 # Default: 8080
 # Hanya diperlukan jika menggunakan docker-compose.frontend.yml
-FRONTEND_PORT_MAPPED=8080
+FRONTEND_PORT_MAPPED=8910
 
 # ============================================
 # TIMEZONE
@@ -135,14 +135,14 @@ DEBUG=True
 # Untuk Development: HOST=127.0.0.1
 # Untuk Docker: HOST=0.0.0.0
 HOST=0.0.0.0
-PORT=8000
+PORT=8020
 
 # ============================================
 # CORS CONFIGURATION
 # ============================================
 # Format: comma-separated tanpa spasi
 # Development: termasuk localhost untuk testing
-CORS_ORIGINS=https://devjargas.ptkiansantang.com,http://localhost:8082,http://localhost:5173
+CORS_ORIGINS=https://devjargas.ptkiansantang.com,http://localhost:8910,http://localhost:5173
 
 # ============================================
 # FILE UPLOAD CONFIGURATION

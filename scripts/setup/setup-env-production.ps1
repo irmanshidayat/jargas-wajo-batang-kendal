@@ -46,12 +46,20 @@ DB_NAME=jargas_apbn
 DEBUG=False
 
 # ============================================
+# SERVER CONFIGURATION
+# ============================================
+# Backend tanpa Docker akan berjalan di port ini
+# Production: 8010 (sesuai standar deployment)
+HOST=0.0.0.0
+PORT=8010
+
+# ============================================
 # CORS CONFIGURATION
 # ============================================
 # Format: comma-separated tanpa spasi
 # Production: domain production dan frontend Docker (jika digunakan)
-# Frontend Docker default: http://localhost:8080
-CORS_ORIGINS=https://jargas.ptkiansantang.com,http://localhost:8080
+# Frontend Docker: http://localhost:8900 (sesuai standar deployment)
+CORS_ORIGINS=https://jargas.ptkiansantang.com,http://localhost:8900
 
 # ============================================
 # FRONTEND DOCKER CONFIGURATION (Optional)
@@ -59,7 +67,7 @@ CORS_ORIGINS=https://jargas.ptkiansantang.com,http://localhost:8080
 # Port untuk frontend Docker container (jika menggunakan Docker)
 # Default: 8080
 # Hanya diperlukan jika menggunakan docker-compose.frontend.yml
-FRONTEND_PORT_MAPPED=8080
+FRONTEND_PORT_MAPPED=8900
 
 # ============================================
 # TIMEZONE
