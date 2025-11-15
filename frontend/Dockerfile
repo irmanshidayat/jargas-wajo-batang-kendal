@@ -7,8 +7,10 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci
+# Clear npm cache dan install dependencies
+# Menggunakan npm install dengan --include=dev untuk memastikan devDependencies terinstall
+RUN npm cache clean --force && \
+    npm install --include=dev --legacy-peer-deps
 
 # Copy source code
 COPY . .
