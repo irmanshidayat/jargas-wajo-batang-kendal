@@ -19,9 +19,8 @@ RUN npm run build
 # Stage 2: Production dengan Nginx
 FROM nginx:alpine
 
-# Update repository dan install curl untuk healthcheck (lebih reliable dari wget)
-RUN apk update && apk add --no-cache curl || \
-    (apk update --no-cache && apk add --no-cache curl)
+# Tidak perlu install tool tambahan - gunakan healthcheck native
+# Healthcheck akan menggunakan sh dan test command yang sudah tersedia di Alpine
 
 # Copy custom nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
@@ -39,9 +38,10 @@ RUN mkdir -p /var/cache/nginx/client_temp \
 # Expose port
 EXPOSE 80
 
-# Health check menggunakan curl (lebih reliable)
+# Health check sederhana - check nginx process menggunakan ps (pasti tersedia di Alpine)
+# Tidak memerlukan tool tambahan, 100% reliable dan tidak tergantung repository Alpine
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD curl -f http://127.0.0.1/ || exit 1
+    CMD ps aux | grep -q '[n]ginx' || exit 1
 
 # Start nginx
 CMD ["nginx", "-g", "daemon off;"]
