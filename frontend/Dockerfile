@@ -4,19 +4,25 @@ FROM node:18-alpine as builder
 # Set working directory
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy package files (tanpa package-lock.json untuk menghindari masalah kompatibilitas)
+COPY package.json ./
 
-# Clear npm cache dan install dependencies
-# Menggunakan npm install dengan --include=dev untuk memastikan devDependencies terinstall
-RUN npm cache clean --force && \
-    npm install --include=dev --legacy-peer-deps
+# Install dependencies dengan retry mechanism dan tanpa package-lock
+# Menggunakan --no-package-lock untuk menghindari masalah dengan lock file
+RUN for i in 1 2 3; do \
+        npm install --no-package-lock --legacy-peer-deps && \
+        test -f node_modules/.bin/vite && break || \
+        (echo "Install attempt $i failed, retrying..." && rm -rf node_modules package-lock.json && sleep 5); \
+    done
+
+# Verifikasi bahwa vite terinstall
+RUN test -f node_modules/.bin/vite || (echo "ERROR: vite not found!" && npm list vite 2>&1 && exit 1)
 
 # Copy source code
 COPY . .
 
-# Build application
-RUN npm run build
+# Build application menggunakan npx untuk memastikan menggunakan local vite
+RUN npx vite build
 
 # Stage 2: Production dengan Nginx
 FROM nginx:alpine
