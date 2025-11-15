@@ -58,7 +58,11 @@ RUN for i in 1 2 3 4 5; do \
                 python3.11-distutils \
                 gcc \
                 libmysqlclient-dev \
-                pkg-config; then \
+                pkg-config \
+                libssl-dev \
+                libffi-dev \
+                rustc \
+                cargo; then \
                 echo "=== Packages installed successfully ==="; \
                 rm -rf /var/lib/apt/lists/*; \
                 break; \
@@ -85,9 +89,14 @@ RUN for i in 1 2 3 4 5; do \
 RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 && \
     python3.11 -m pip install --upgrade pip setuptools wheel
 
+# Uninstall system cryptography package jika ada untuk menghindari konflik
+RUN apt-get remove -y python3-cryptography 2>/dev/null || true && \
+    rm -rf /usr/lib/python3/dist-packages/cryptography* 2>/dev/null || true
+
 # Copy requirements dan install dependencies
+# Gunakan --ignore-installed untuk memastikan menggunakan pip packages
 COPY requirements.txt .
-RUN python3.11 -m pip install --no-cache-dir --user -r requirements.txt
+RUN python3.11 -m pip install --no-cache-dir --user --ignore-installed -r requirements.txt
 
 # Production stage
 FROM ubuntu:24.04
@@ -146,7 +155,9 @@ RUN for i in 1 2 3 4 5; do \
                 python3.11 \
                 python3.11-dev \
                 python3.11-distutils \
-                libmysqlclient-dev; then \
+                libmysqlclient-dev \
+                libssl-dev \
+                libffi-dev; then \
                 echo "=== Packages installed successfully ==="; \
                 rm -rf /var/lib/apt/lists/*; \
                 break; \
@@ -175,6 +186,18 @@ RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 && \
 
 # Copy Python dependencies dari builder
 COPY --from=builder /root/.local /root/.local
+
+# Uninstall system cryptography package jika ada untuk menghindari konflik
+# Harus dilakukan setelah copy untuk memastikan pip cryptography tersedia
+RUN apt-get remove -y python3-cryptography 2>/dev/null || true && \
+    rm -rf /usr/lib/python3/dist-packages/cryptography* 2>/dev/null || true && \
+    rm -rf /usr/lib/python3.11/dist-packages/cryptography* 2>/dev/null || true
+
+# Set PYTHONPATH untuk memastikan user packages diutamakan
+ENV PYTHONPATH=/root/.local/lib/python3.11/site-packages:$PYTHONPATH
+
+# Verifikasi cryptography dari pip tersedia
+RUN python3.11 -c "import cryptography; print(f'Cryptography version: {cryptography.__version__}'); print(f'Cryptography path: {cryptography.__file__}')" || echo "WARNING: Cryptography import failed"
 
 # Copy application code
 COPY . .
