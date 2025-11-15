@@ -261,7 +261,22 @@ jobs:
             fi
             
             # Setup virtual environment
-            if [ ! -d "venv" ]; then
+            VENV_VALID=false
+            if [ -d "venv" ]; then
+              # Check if venv is valid
+              if [ -f "venv/bin/activate" ] && [ -f "venv/bin/python3" ]; then
+                echo "✅ Virtual environment exists and appears valid"
+                VENV_VALID=true
+              else
+                echo "⚠️  Virtual environment exists but appears invalid/corrupt"
+                echo "Removing invalid virtual environment..."
+                rm -rf venv
+                echo "✅ Invalid virtual environment removed"
+                VENV_VALID=false
+              fi
+            fi
+            
+            if [ "$VENV_VALID" = false ]; then
               echo "Creating virtual environment..."
               python3 -m venv venv || {
                 echo "❌ Error: Cannot create virtual environment"
@@ -274,23 +289,39 @@ jobs:
                 }
                 echo "✅ Virtual environment created (without pip)"
                 # Install pip manually
-                source venv/bin/activate
-                curl -sS https://bootstrap.pypa.io/get-pip.py | python3 || {
-                  echo "❌ Error: Cannot install pip"
+                if [ -f "venv/bin/activate" ]; then
+                  source venv/bin/activate
+                  curl -sS https://bootstrap.pypa.io/get-pip.py | python3 || {
+                    echo "❌ Error: Cannot install pip"
+                    exit 1
+                  }
+                  deactivate
+                  echo "✅ Pip installed in virtual environment"
+                else
+                  echo "❌ Error: Cannot activate venv to install pip"
                   exit 1
-                }
-                deactivate
-                echo "✅ Pip installed in virtual environment"
+                fi
               }
               echo "✅ Virtual environment created"
-            else
-              echo "✅ Virtual environment exists"
+            fi
+            
+            # Verify venv is valid before proceeding
+            if [ ! -f "venv/bin/activate" ]; then
+              echo "❌ Error: Virtual environment activate script not found"
+              echo "Removing invalid venv and retrying..."
+              rm -rf venv
+              python3 -m venv venv || {
+                echo "❌ Error: Cannot recreate virtual environment"
+                exit 1
+              }
             fi
             
             # Activate venv and install dependencies
             echo "Installing/updating dependencies..."
             source venv/bin/activate || {
               echo "❌ Error: Cannot activate virtual environment"
+              echo "Checking venv structure..."
+              ls -la venv/bin/ || true
               exit 1
             }
             pip install --upgrade pip setuptools wheel > /dev/null 2>&1
