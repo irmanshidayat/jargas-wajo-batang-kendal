@@ -4,12 +4,22 @@ FROM python:3.11-slim as builder
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    default-libmysqlclient-dev \
-    pkg-config \
-    && rm -rf /var/lib/apt/lists/*
+# Konfigurasi apt untuk handle network issues dan unavailable repositories
+RUN echo 'Acquire::http::Timeout "30";' > /etc/apt/apt.conf.d/99timeout && \
+    echo 'Acquire::ftp::Timeout "30";' >> /etc/apt/apt.conf.d/99timeout && \
+    echo 'Acquire::Retries "3";' >> /etc/apt/apt.conf.d/99timeout
+
+# Install system dependencies dengan retry mechanism dan timeout
+# Menggunakan retry untuk handle network issues dan timeout untuk menghindari stuck
+RUN for i in 1 2 3; do \
+        timeout 120 apt-get update -o Acquire::http::Timeout=30 -o Acquire::ftp::Timeout=30 && \
+        timeout 300 apt-get install -y --no-install-recommends \
+            gcc \
+            default-libmysqlclient-dev \
+            pkg-config && \
+        rm -rf /var/lib/apt/lists/* && break || \
+        (echo "Install attempt $i failed, retrying..." && sleep 5 && rm -rf /var/lib/apt/lists/*); \
+    done
 
 # Copy requirements dan install dependencies
 COPY requirements.txt .
@@ -21,10 +31,19 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Install runtime dependencies untuk MySQL
-RUN apt-get update && apt-get install -y \
-    default-libmysqlclient-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Konfigurasi apt untuk handle network issues dan unavailable repositories
+RUN echo 'Acquire::http::Timeout "30";' > /etc/apt/apt.conf.d/99timeout && \
+    echo 'Acquire::ftp::Timeout "30";' >> /etc/apt/apt.conf.d/99timeout && \
+    echo 'Acquire::Retries "3";' >> /etc/apt/apt.conf.d/99timeout
+
+# Install runtime dependencies untuk MySQL dengan retry mechanism dan timeout
+RUN for i in 1 2 3; do \
+        timeout 120 apt-get update -o Acquire::http::Timeout=30 -o Acquire::ftp::Timeout=30 && \
+        timeout 300 apt-get install -y --no-install-recommends \
+            default-libmysqlclient-dev && \
+        rm -rf /var/lib/apt/lists/* && break || \
+        (echo "Install attempt $i failed, retrying..." && sleep 5 && rm -rf /var/lib/apt/lists/*); \
+    done
 
 # Copy Python dependencies dari builder
 COPY --from=builder /root/.local /root/.local
