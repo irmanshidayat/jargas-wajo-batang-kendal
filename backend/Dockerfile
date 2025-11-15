@@ -5,20 +5,40 @@ FROM python:3.11-slim as builder
 WORKDIR /app
 
 # Konfigurasi apt untuk handle network issues dan unavailable repositories
-RUN echo 'Acquire::http::Timeout "30";' > /etc/apt/apt.conf.d/99timeout && \
-    echo 'Acquire::ftp::Timeout "30";' >> /etc/apt/apt.conf.d/99timeout && \
-    echo 'Acquire::Retries "3";' >> /etc/apt/apt.conf.d/99timeout
+RUN echo 'Acquire::http::Timeout "60";' > /etc/apt/apt.conf.d/99timeout && \
+    echo 'Acquire::ftp::Timeout "60";' >> /etc/apt/apt.conf.d/99timeout && \
+    echo 'Acquire::Retries "5";' >> /etc/apt/apt.conf.d/99timeout && \
+    echo 'Acquire::http::Pipeline-Depth "0";' >> /etc/apt/apt.conf.d/99timeout && \
+    echo 'APT::Get::AllowUnauthenticated "false";' >> /etc/apt/apt.conf.d/99timeout && \
+    echo 'Acquire::Check-Valid-Until "false";' >> /etc/apt/apt.conf.d/99timeout
 
 # Install system dependencies dengan retry mechanism dan timeout
 # Menggunakan retry untuk handle network issues dan timeout untuk menghindari stuck
-RUN for i in 1 2 3; do \
-        timeout 120 apt-get update -o Acquire::http::Timeout=30 -o Acquire::ftp::Timeout=30 && \
-        timeout 300 apt-get install -y --no-install-recommends \
+# Menambahkan opsi untuk skip unavailable repositories dan menggunakan mirror alternatif
+RUN for i in 1 2 3 4 5; do \
+        echo "=== Attempt $i: Updating package lists ==="; \
+        timeout 180 apt-get update \
+            -o Acquire::http::Timeout=60 \
+            -o Acquire::ftp::Timeout=60 \
+            -o Acquire::Check-Valid-Until=false \
+            -o APT::Get::AllowUnauthenticated=false \
+            -o APT::Get::Allow-Redirect=false \
+            -o Debug::pkgProblemResolver=0 \
+            -o Debug::NoLocking=1 2>&1 | (grep -v "^Ign:" || true) && \
+        echo "=== Attempt $i: Installing packages ===" && \
+        timeout 600 apt-get install -y --no-install-recommends \
+            -o Acquire::http::Timeout=60 \
+            -o Acquire::ftp::Timeout=60 \
+            -o Acquire::Check-Valid-Until=false \
+            -o APT::Get::AllowUnauthenticated=false \
             gcc \
             default-libmysqlclient-dev \
             pkg-config && \
+        echo "=== Packages installed successfully ===" && \
         rm -rf /var/lib/apt/lists/* && break || \
-        (echo "Install attempt $i failed, retrying..." && sleep 5 && rm -rf /var/lib/apt/lists/*); \
+        (echo "=== Install attempt $i failed, retrying in 15 seconds... ===" && \
+         rm -rf /var/lib/apt/lists/* && \
+         [ $i -lt 5 ] && sleep 15 || (echo "=== All retry attempts failed ===" && exit 1)); \
     done
 
 # Copy requirements dan install dependencies
@@ -32,17 +52,37 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Konfigurasi apt untuk handle network issues dan unavailable repositories
-RUN echo 'Acquire::http::Timeout "30";' > /etc/apt/apt.conf.d/99timeout && \
-    echo 'Acquire::ftp::Timeout "30";' >> /etc/apt/apt.conf.d/99timeout && \
-    echo 'Acquire::Retries "3";' >> /etc/apt/apt.conf.d/99timeout
+RUN echo 'Acquire::http::Timeout "60";' > /etc/apt/apt.conf.d/99timeout && \
+    echo 'Acquire::ftp::Timeout "60";' >> /etc/apt/apt.conf.d/99timeout && \
+    echo 'Acquire::Retries "5";' >> /etc/apt/apt.conf.d/99timeout && \
+    echo 'Acquire::http::Pipeline-Depth "0";' >> /etc/apt/apt.conf.d/99timeout && \
+    echo 'APT::Get::AllowUnauthenticated "false";' >> /etc/apt/apt.conf.d/99timeout && \
+    echo 'Acquire::Check-Valid-Until "false";' >> /etc/apt/apt.conf.d/99timeout
 
 # Install runtime dependencies untuk MySQL dengan retry mechanism dan timeout
-RUN for i in 1 2 3; do \
-        timeout 120 apt-get update -o Acquire::http::Timeout=30 -o Acquire::ftp::Timeout=30 && \
-        timeout 300 apt-get install -y --no-install-recommends \
+# Menambahkan opsi untuk skip unavailable repositories dan menggunakan mirror alternatif
+RUN for i in 1 2 3 4 5; do \
+        echo "=== Attempt $i: Updating package lists ==="; \
+        timeout 180 apt-get update \
+            -o Acquire::http::Timeout=60 \
+            -o Acquire::ftp::Timeout=60 \
+            -o Acquire::Check-Valid-Until=false \
+            -o APT::Get::AllowUnauthenticated=false \
+            -o APT::Get::Allow-Redirect=false \
+            -o Debug::pkgProblemResolver=0 \
+            -o Debug::NoLocking=1 2>&1 | (grep -v "^Ign:" || true) && \
+        echo "=== Attempt $i: Installing packages ===" && \
+        timeout 600 apt-get install -y --no-install-recommends \
+            -o Acquire::http::Timeout=60 \
+            -o Acquire::ftp::Timeout=60 \
+            -o Acquire::Check-Valid-Until=false \
+            -o APT::Get::AllowUnauthenticated=false \
             default-libmysqlclient-dev && \
+        echo "=== Packages installed successfully ===" && \
         rm -rf /var/lib/apt/lists/* && break || \
-        (echo "Install attempt $i failed, retrying..." && sleep 5 && rm -rf /var/lib/apt/lists/*); \
+        (echo "=== Install attempt $i failed, retrying in 15 seconds... ===" && \
+         rm -rf /var/lib/apt/lists/* && \
+         [ $i -lt 5 ] && sleep 15 || (echo "=== All retry attempts failed ===" && exit 1)); \
     done
 
 # Copy Python dependencies dari builder
