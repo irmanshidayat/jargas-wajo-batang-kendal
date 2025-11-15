@@ -20,7 +20,7 @@ Tutorial ringkas untuk deployment ke VPS dengan 2 subdomain (Production & Develo
 | **Docker Compose** | `docker-compose.yml` | `docker-compose.dev.yml` |
 | **Environment** | `.env` | `.env.dev` |
 | **Database** | `jargas_apbn` | `jargas_apbn_dev` |
-| **Port** | 8080, 8001, 3308, 8081 | 8082, 8002, 3309, 8083 |
+| **Port** | 8080, 8001, 3308, 8081 | 8082, 8012, 3309, 8083 |
 
 ---
 
@@ -41,8 +41,6 @@ git checkout dev
 git add . && git commit -m "Update" && git push origin dev
 # Auto-deploy via GitHub Actions → https://devjargas.ptkiansantang.com
 ```
-
-test..
 
 ### Manual Deploy (Jika GitHub Actions Tidak Aktif)
 
@@ -108,10 +106,10 @@ docker-compose -f docker-compose.dev.yml --env-file .env.dev ps
 **Health Check:**
 ```bash
 # Production
-curl https://jargas.ptkiansantang.com/api/v1/health
+curl https://jargas.ptkiansantang.com/health
 
 # Development
-curl https://devjargas.ptkiansantang.com/api/v1/health
+curl https://devjargas.ptkiansantang.com/health
 ```
 
 **Log Migration:**
@@ -285,6 +283,71 @@ ssh root@72.61.142.109 "cat ~/.ssh/authorized_keys | grep github-actions"
 - Cek container logs: `docker-compose -f docker-compose.dev.yml --env-file .env.dev logs backend`
 - Pastikan backend container sudah running: `docker-compose -f docker-compose.dev.yml --env-file .env.dev ps`
 
+**Error: "Bind for 0.0.0.0:8002 failed: port is already allocated"**
+- ❌ **Penyebab**: Port backend development (8002) sudah digunakan oleh proses atau container lain
+- ✅ **Solusi**:
+  1. **Cek proses yang menggunakan port:**
+     ```bash
+     ssh root@72.61.142.109
+     ss -lntp | grep 8002 || netstat -tulpn | grep 8002
+     docker ps --format 'table {{.ID}}\t{{.Names}}\t{{.Ports}}' | grep 8002
+     ```
+  2. **Opsi 1 - Hentikan container yang bentrok (jika ada):**
+     ```bash
+     docker stop <CONTAINER_NAME_OR_ID>
+     docker rm <CONTAINER_NAME_OR_ID>
+     ```
+  3. **Opsi 2 - Ganti port backend di `.env.dev` (jika port memang diperlukan aplikasi lain):**
+     ```bash
+     cd ~/jargas-wajo-batang-kendal-dev
+     # Edit .env.dev, tambahkan/ubah:
+     BACKEND_PORT_MAPPED=8012
+     # Lalu rebuild dan restart:
+     docker-compose -f docker-compose.dev.yml --env-file .env.dev build --no-cache
+     docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d
+     ```
+  4. **Verifikasi port sudah berubah:**
+     ```bash
+     docker-compose -f docker-compose.dev.yml --env-file .env.dev ps
+     # Pastikan backend menggunakan port baru (contoh: 0.0.0.0:8012->8000/tcp)
+     ```
+  5. **Update nginx config di server VPS (PENTING!):**
+     ```bash
+     ssh root@72.61.142.109
+     # Update upstream backend port di nginx config
+     sed -i 's/127.0.0.1:8002/127.0.0.1:8012/g' /etc/nginx/sites-available/jargas-dev
+     # Test konfigurasi
+     nginx -t
+     # Reload nginx
+     systemctl reload nginx
+     # Verifikasi
+     grep -A 3 "backend_container_dev" /etc/nginx/sites-available/jargas-dev
+     ```
+
+**Error: "404 Not Found" pada endpoint `/api/v1/auth/profile` setelah perubahan port**
+- ❌ **Penyebab**: Nginx host di server VPS masih menggunakan port lama (8002) untuk upstream backend
+- ✅ **Solusi**:
+  1. **Update nginx config di server:**
+     ```bash
+     ssh root@72.61.142.109
+     sed -i 's/127.0.0.1:8002/127.0.0.1:8012/g' /etc/nginx/sites-available/jargas-dev
+     nginx -t
+     systemctl reload nginx
+     ```
+  2. **Verifikasi backend bisa diakses langsung:**
+     ```bash
+     curl http://localhost:8012/health
+     # Endpoint /api/v1/health tidak ada, gunakan /health saja
+     ```
+  3. **Test melalui nginx:**
+     ```bash
+     curl -k https://devjargas.ptkiansantang.com/health
+     ```
+  4. **Cek nginx error log jika masih error:**
+     ```bash
+     tail -f /var/log/nginx/jargas_dev_error.log
+     ```
+
 ---
 
 ## 📝 Workflow Git
@@ -354,4 +417,4 @@ git push origin main
 
 ---
 
-**Terakhir diupdate:** 2025-01-27
+**Terakhir diupdate:** 2025-11-15
