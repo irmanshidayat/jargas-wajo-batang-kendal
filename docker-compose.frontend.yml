@@ -1,0 +1,40 @@
+# Docker Compose untuk Frontend saja (Backend tanpa Docker)
+# Backend berjalan di host machine (localhost:8000)
+# Database menggunakan XAMPP MySQL (localhost:3306)
+
+services:
+  # Frontend Nginx Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: jargas_frontend
+    restart: unless-stopped
+    environment:
+      # API Base URL untuk build time (jika diperlukan)
+      VITE_API_BASE_URL: /api/v1
+      TZ: Asia/Jakarta
+    # Port mapping - HARUS dikonfigurasi via environment variable FRONTEND_PORT_MAPPED
+    # Set di file .env atau .env.dev (contoh: FRONTEND_PORT_MAPPED=8080)
+    ports:
+      - "${FRONTEND_PORT_MAPPED}:80"
+    networks:
+      - jargas_frontend_network
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep -q '[n]ginx' || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    # Extra hosts untuk akses host machine dari container
+    # host.docker.internal sudah didukung di Windows/Mac Docker Desktop
+    # Untuk Linux, mungkin perlu tambahan konfigurasi
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+# Network untuk frontend
+networks:
+  jargas_frontend_network:
+    driver: bridge
+    name: jargas_frontend_network
+

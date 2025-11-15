@@ -205,8 +205,6 @@ Setup environment variables untuk development server.
 ### `setup-dev-domain.ps1`
 Setup domain development (devjargas.ptkiansantang.com).
 
-### `setup-port-8083-ssl.ps1` / `setup-port-8083-ssl.sh`
-Setup port 8083 dan SSL certificate untuk Adminer.
 
 **Catatan:** Script di folder `setup/` biasanya hanya dijalankan sekali saat setup awal server.
 
@@ -244,8 +242,6 @@ Script one-time fix yang sudah tidak diperlukan lagi karena:
 4. **Fix lainnya:**
    - `fix-database-empty.ps1` (sudah ada auto-migration)
    - `fix-dev-domain.ps1` (setup one-time)
-   - `debug-nginx-adminer.sh` (debug one-time)
-   - `update-nginx-adminer-dev.sh` (update one-time)
 
 **⚠️ Catatan Penting:**
 - Script di folder `archive/` TIDAK PERLU dijalankan lagi

@@ -49,18 +49,18 @@ DEBUG=True
 # CORS CONFIGURATION
 # ============================================
 # Format: comma-separated tanpa spasi
-# Development: termasuk localhost untuk testing
-CORS_ORIGINS=https://devjargas.ptkiansantang.com,http://localhost:8082,http://localhost:5173
+# Development: domain development, frontend Docker, dan dev server
+# Frontend Docker default: http://localhost:8080
+# Vite dev server default: http://localhost:5173
+CORS_ORIGINS=https://devjargas.ptkiansantang.com,http://localhost:8080,http://localhost:5173,http://localhost:3000
 
 # ============================================
-# PORT MAPPING CONFIGURATION
+# FRONTEND DOCKER CONFIGURATION (Optional)
 # ============================================
-# Port mapping untuk Docker Compose Development
-# Pastikan tidak konflik dengan production atau aplikasi lain
-DB_PORT_MAPPED=3309
-BACKEND_PORT_MAPPED=8002
-FRONTEND_PORT_MAPPED=8082
-ADMINER_PORT_MAPPED=18083
+# Port untuk frontend Docker container (jika menggunakan Docker)
+# Default: 8080
+# Hanya diperlukan jika menggunakan docker-compose.frontend.yml
+FRONTEND_PORT_MAPPED=8080
 
 # ============================================
 # TIMEZONE

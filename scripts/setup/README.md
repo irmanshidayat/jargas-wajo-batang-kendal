@@ -92,25 +92,6 @@ Setup domain development (devjargas.ptkiansantang.com).
 
 ---
 
-### SSL & Port Setup
-
-#### `setup-port-8083-ssl.ps1` / `setup-port-8083-ssl.sh`
-Setup port 8083 dan SSL certificate untuk Adminer.
-
-**Cara Menggunakan:**
-```powershell
-# Dari Windows
-.\scripts\setup\setup-port-8083-ssl.ps1
-
-# Atau di server
-bash scripts/setup/setup-port-8083-ssl.sh
-```
-
-**Fitur:**
-- Setup firewall (UFW) untuk port 8083
-- Verifikasi SSL certificate
-- Konfigurasi nginx untuk Adminer
-
 ---
 
 ## ⚠️ Catatan

@@ -224,19 +224,83 @@ jobs:
             
             echo "✅ Environment files verified/created"
             
-            # Step 6: Verify docker-compose file exists
+            # Step 6: Setup Backend (without Docker)
             echo ""
-            echo "Step 6: Verifying docker-compose.dev.yml..."
-            if [ ! -f docker-compose.dev.yml ]; then
-              echo "❌ Error: docker-compose.dev.yml not found"
+            echo "Step 6: Setting up Backend (without Docker)..."
+            cd backend || {
+              echo "❌ Error: Cannot cd to backend directory"
+              exit 1
+            }
+            
+            # Check Python
+            if ! command -v python3 &> /dev/null; then
+              echo "❌ Error: Python3 not found"
+              echo "Please install Python 3.11 or higher"
               exit 1
             fi
-            echo "✅ docker-compose.dev.yml found"
+            PYTHON_VERSION=$(python3 --version)
+            echo "✅ Found: $PYTHON_VERSION"
             
-            # Step 7: Build Docker containers
+            # Setup virtual environment
+            if [ ! -d "venv" ]; then
+              echo "Creating virtual environment..."
+              python3 -m venv venv || {
+                echo "❌ Error: Cannot create virtual environment"
+                exit 1
+              }
+              echo "✅ Virtual environment created"
+            else
+              echo "✅ Virtual environment exists"
+            fi
+            
+            # Activate venv and install dependencies
+            echo "Installing/updating dependencies..."
+            source venv/bin/activate || {
+              echo "❌ Error: Cannot activate virtual environment"
+              exit 1
+            }
+            pip install --upgrade pip setuptools wheel > /dev/null 2>&1
+            pip install -r requirements.txt || {
+              echo "❌ Error: Failed to install dependencies"
+              exit 1
+            }
+            echo "✅ Dependencies installed"
+            deactivate
+            
+            # Step 7: Stop existing backend process (if running)
             echo ""
-            echo "Step 7: Building Docker containers (development)..."
-            if ! docker-compose -f docker-compose.dev.yml --env-file .env.dev build --no-cache 2>&1; then
+            echo "Step 7: Stopping existing backend process..."
+            pkill -f "python.*run.py" || echo "No existing backend process found"
+            sleep 2
+            echo "✅ Backend process stopped"
+            
+            # Step 8: Start backend as systemd service or background process
+            echo ""
+            echo "Step 8: Starting backend service..."
+            cd "$PROJECT_PATH/backend" || exit 1
+            source venv/bin/activate
+            
+            # Start backend in background
+            nohup python3 run.py > backend.log 2>&1 &
+            BACKEND_PID=$!
+            echo $BACKEND_PID > backend.pid
+            echo "✅ Backend started (PID: $BACKEND_PID)"
+            deactivate
+            cd "$PROJECT_PATH" || exit 1
+            
+            # Step 9: Verify docker-compose.frontend.yml exists
+            echo ""
+            echo "Step 9: Verifying docker-compose.frontend.yml..."
+            if [ ! -f docker-compose.frontend.yml ]; then
+              echo "❌ Error: docker-compose.frontend.yml not found"
+              exit 1
+            fi
+            echo "✅ docker-compose.frontend.yml found"
+            
+            # Step 10: Build and start Frontend Docker container
+            echo ""
+            echo "Step 10: Building Frontend Docker container..."
+            if ! docker-compose -f docker-compose.frontend.yml --env-file .env.dev build --no-cache 2>&1; then
               echo "❌ Error: Docker build failed"
               echo "Checking Docker status..."
               docker ps -a || echo "Docker not accessible"
@@ -244,66 +308,117 @@ jobs:
             fi
             echo "✅ Docker build completed"
             
-            # Step 8: Stop existing containers
+            # Step 11: Stop existing frontend container
             echo ""
-            echo "Step 8: Stopping existing containers..."
-            docker-compose -f docker-compose.dev.yml --env-file .env.dev down 2>&1 || {
+            echo "Step 11: Stopping existing frontend container..."
+            docker-compose -f docker-compose.frontend.yml --env-file .env.dev down 2>&1 || {
               echo "⚠️  Warning: Some containers may not have stopped cleanly"
             }
-            echo "✅ Containers stopped"
+            echo "✅ Frontend container stopped"
             
-            # Step 9: Start containers
+            # Step 12: Start frontend container
             echo ""
-            echo "Step 9: Starting containers..."
-            if ! docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d 2>&1; then
-              echo "❌ Error: Failed to start containers"
+            echo "Step 12: Starting frontend container..."
+            if ! docker-compose -f docker-compose.frontend.yml --env-file .env.dev up -d 2>&1; then
+              echo "❌ Error: Failed to start frontend container"
               echo "Checking container status..."
-              docker-compose -f docker-compose.dev.yml --env-file .env.dev ps || true
+              docker-compose -f docker-compose.frontend.yml --env-file .env.dev ps || true
               echo "Checking logs..."
-              docker-compose -f docker-compose.dev.yml --env-file .env.dev logs --tail=50 || true
+              docker-compose -f docker-compose.frontend.yml --env-file .env.dev logs --tail=50 || true
               exit 1
             fi
-            echo "✅ Containers started"
+            echo "✅ Frontend container started"
             
-            # Step 10: Wait for services
+            # Step 13: Wait for services
             echo ""
-            echo "Step 10: Waiting for services to be ready..."
+            echo "Step 13: Waiting for services to be ready..."
             sleep 30
             
-            # Step 11: Check container status
+            # Step 14: Check services status
             echo ""
-            echo "Step 11: Checking container status..."
-            docker-compose -f docker-compose.dev.yml --env-file .env.dev ps
+            echo "Step 14: Checking services status..."
             
-            # Check if containers are running
-            RUNNING_CONTAINERS=$(docker-compose -f docker-compose.dev.yml --env-file .env.dev ps -q | wc -l)
-            if [ "$RUNNING_CONTAINERS" -eq 0 ]; then
-              echo "⚠️  Warning: No containers are running"
-              echo "Checking logs for errors..."
-              docker-compose -f docker-compose.dev.yml --env-file .env.dev logs --tail=100 || true
+            # Check backend
+            if [ -f backend/backend.pid ]; then
+              BACKEND_PID=$(cat backend/backend.pid)
+              if ps -p $BACKEND_PID > /dev/null 2>&1; then
+                echo "✅ Backend is running (PID: $BACKEND_PID)"
+                echo "   Testing backend health..."
+                sleep 5
+                if curl -f -s http://localhost:8000/health > /dev/null 2>&1; then
+                  echo "✅ Backend health check passed"
+                else
+                  echo "⚠️  Warning: Backend health check failed"
+                  echo "   Backend may still be starting up..."
+                fi
+              else
+                echo "⚠️  Warning: Backend process not found"
+                echo "Checking backend logs..."
+                tail -50 backend/backend.log || true
+              fi
             else
-              echo "✅ $RUNNING_CONTAINERS container(s) running"
+              echo "⚠️  Warning: Backend PID file not found"
+            fi
+            
+            # Check frontend container
+            docker-compose -f docker-compose.frontend.yml --env-file .env.dev ps
+            
+            RUNNING_CONTAINERS=$(docker-compose -f docker-compose.frontend.yml --env-file .env.dev ps -q | wc -l)
+            if [ "$RUNNING_CONTAINERS" -eq 0 ]; then
+              echo "⚠️  Warning: No frontend containers are running"
+              echo "Checking logs for errors..."
+              docker-compose -f docker-compose.frontend.yml --env-file .env.dev logs --tail=100 || true
+            else
+              echo "✅ $RUNNING_CONTAINERS frontend container(s) running"
             fi
             
             echo ""
             echo "=========================================="
             echo "✅ Deployment completed!"
             echo "=========================================="
-            echo "🌐 Frontend: https://devjargas.ptkiansantang.com"
-            echo "🔗 Backend: https://devjargas.ptkiansantang.com/health"
+            echo "🌐 Frontend: https://devjargas.ptkiansantang.com:463"
+            echo "🔗 Backend: http://localhost:8000"
+            echo "🔗 Backend API: https://devjargas.ptkiansantang.com:463/api/v1/health"
+            echo ""
+            echo "📝 Note:"
+            echo "   - Backend berjalan tanpa Docker di port 8000"
+            echo "   - Frontend berjalan dengan Docker"
+            echo "   - Nginx akan proxy request ke backend lokal"
             echo ""
           DEPLOY_SCRIPT
 
       - name: Health Check
         run: |
-          sleep 10
-          curl -f https://devjargas.ptkiansantang.com/health || exit 1
+          echo "🔍 Waiting for services to be fully ready..."
+          sleep 15
+          echo "🏥 Testing health endpoint..."
+          # Try /health first (nginx static endpoint)
+          if curl -f -s https://devjargas.ptkiansantang.com:463/health > /dev/null 2>&1; then
+            echo "✅ Health check passed: /health"
+          # Fallback to /api/v1/health (backend endpoint)
+          elif curl -f -s https://devjargas.ptkiansantang.com:463/api/v1/health > /dev/null 2>&1; then
+            echo "✅ Health check passed: /api/v1/health"
+          else
+            echo "❌ Health check failed for both endpoints"
+            echo "Checking /health response:"
+            curl -v https://devjargas.ptkiansantang.com:463/health || true
+            echo ""
+            echo "Checking /api/v1/health response:"
+            curl -v https://devjargas.ptkiansantang.com:463/api/v1/health || true
+            exit 1
+          fi
 
       - name: Deployment Summary
         run: |
           echo "## ✅ Development Deployment Successful" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Frontend**: https://devjargas.ptkiansantang.com" >> $GITHUB_STEP_SUMMARY
-          echo "- **Backend**: https://devjargas.ptkiansantang.com/health" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend**: https://devjargas.ptkiansantang.com:463" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend**: http://localhost:8000" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend API**: https://devjargas.ptkiansantang.com:463/api/v1/health" >> $GITHUB_STEP_SUMMARY
           echo "- **Deployed at**: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📝 Architecture" >> $GITHUB_STEP_SUMMARY
+          echo "- Backend: Running without Docker (Python)" >> $GITHUB_STEP_SUMMARY
+          echo "- Frontend: Running with Docker" >> $GITHUB_STEP_SUMMARY
+          echo "- Database: MySQL (server)" >> $GITHUB_STEP_SUMMARY
 

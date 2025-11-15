@@ -150,6 +150,5 @@ Write-Host ""
 Write-Host "3. Verifikasi aplikasi:" -ForegroundColor White
 Write-Host "   - Frontend: https://jargas.ptkiansantang.com" -ForegroundColor Gray
 Write-Host "   - Backend: https://jargas.ptkiansantang.com/api/v1/health" -ForegroundColor Gray
-Write-Host "   - Adminer: https://jargas.ptkiansantang.com:8081" -ForegroundColor Gray
 Write-Host ""
 

@@ -49,18 +49,17 @@ DEBUG=False
 # CORS CONFIGURATION
 # ============================================
 # Format: comma-separated tanpa spasi
-# Production: hanya domain production
-CORS_ORIGINS=https://jargas.ptkiansantang.com
+# Production: domain production dan frontend Docker (jika digunakan)
+# Frontend Docker default: http://localhost:8080
+CORS_ORIGINS=https://jargas.ptkiansantang.com,http://localhost:8080
 
 # ============================================
-# PORT MAPPING CONFIGURATION
+# FRONTEND DOCKER CONFIGURATION (Optional)
 # ============================================
-# Port mapping untuk Docker Compose
-# Pastikan tidak konflik dengan aplikasi lain
-DB_PORT_MAPPED=3308
-BACKEND_PORT_MAPPED=8001
+# Port untuk frontend Docker container (jika menggunakan Docker)
+# Default: 8080
+# Hanya diperlukan jika menggunakan docker-compose.frontend.yml
 FRONTEND_PORT_MAPPED=8080
-ADMINER_PORT_MAPPED=8081
 
 # ============================================
 # TIMEZONE
