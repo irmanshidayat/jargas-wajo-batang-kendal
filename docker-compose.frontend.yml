@@ -17,7 +17,7 @@ services:
     # Port - dikonfigurasi via environment variable FRONTEND_PORT
     # Set di file .env atau .env.dev (contoh: FRONTEND_PORT=8910 untuk dev, 8900 untuk prod)
     ports:
-      - "${FRONTEND_PORT}:8910"
+      - "${FRONTEND_PORT}:80"
     networks:
       - jargas_frontend_network
     healthcheck:
