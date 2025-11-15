@@ -14,10 +14,10 @@ services:
       # API Base URL untuk build time (jika diperlukan)
       VITE_API_BASE_URL: /api/v1
       TZ: Asia/Jakarta
-    # Port mapping - HARUS dikonfigurasi via environment variable FRONTEND_PORT_MAPPED
-    # Set di file .env atau .env.dev (contoh: FRONTEND_PORT_MAPPED=8080)
+    # Port - dikonfigurasi via environment variable FRONTEND_PORT
+    # Set di file .env atau .env.dev (contoh: FRONTEND_PORT=8910 untuk dev, 8900 untuk prod)
     ports:
-      - "${FRONTEND_PORT_MAPPED}:80"
+      - "${FRONTEND_PORT}:8910"
     networks:
       - jargas_frontend_network
     healthcheck:

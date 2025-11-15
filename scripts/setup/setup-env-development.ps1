@@ -55,12 +55,12 @@ DEBUG=True
 CORS_ORIGINS=https://devjargas.ptkiansantang.com,http://localhost:8910,http://localhost:5173,http://localhost:3000
 
 # ============================================
-# FRONTEND DOCKER CONFIGURATION (Optional)
+# FRONTEND DOCKER CONFIGURATION
 # ============================================
-# Port untuk frontend Docker container (jika menggunakan Docker)
-# Default: 8080
+# Port untuk frontend Docker container
+# Development: 8910 (sesuai standar deployment)
 # Hanya diperlukan jika menggunakan docker-compose.frontend.yml
-FRONTEND_PORT_MAPPED=8910
+FRONTEND_PORT=8910
 
 # ============================================
 # TIMEZONE

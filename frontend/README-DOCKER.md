@@ -66,16 +66,16 @@ Frontend akan berjalan di: **http://localhost:8080**
 
 ### Port Mapping
 
-Default port frontend adalah `8080`. Untuk mengubah port, edit file `.env` di root project:
+Default port frontend adalah `8910` untuk development dan `8900` untuk production. Untuk mengubah port, edit file `.env` atau `.env.dev` di root project:
 
 ```env
-FRONTEND_PORT_MAPPED=8080
+FRONTEND_PORT=8910
 ```
 
 Atau override saat menjalankan:
 
 ```powershell
-FRONTEND_PORT_MAPPED=3000 docker-compose -f docker-compose.frontend.yml up -d
+FRONTEND_PORT=3000 docker-compose -f docker-compose.frontend.yml up -d
 ```
 
 ### API Base URL
@@ -146,8 +146,8 @@ Bind for 0.0.0.0:8080 failed: port is already allocated
 ```
 
 **Solusi:**
-1. Cek aplikasi lain yang menggunakan port 8080
-2. Ubah port di `.env`: `FRONTEND_PORT_MAPPED=3000`
+1. Cek aplikasi lain yang menggunakan port tersebut
+2. Ubah port di `.env` atau `.env.dev`: `FRONTEND_PORT=3000`
 3. Atau stop aplikasi yang menggunakan port tersebut
 
 ### Error: Build gagal

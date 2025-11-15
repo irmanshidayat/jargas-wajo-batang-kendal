@@ -62,12 +62,12 @@ PORT=8010
 CORS_ORIGINS=https://jargas.ptkiansantang.com,http://localhost:8900
 
 # ============================================
-# FRONTEND DOCKER CONFIGURATION (Optional)
+# FRONTEND DOCKER CONFIGURATION
 # ============================================
-# Port untuk frontend Docker container (jika menggunakan Docker)
-# Default: 8080
+# Port untuk frontend Docker container
+# Production: 8900 (sesuai standar deployment)
 # Hanya diperlukan jika menggunakan docker-compose.frontend.yml
-FRONTEND_PORT_MAPPED=8900
+FRONTEND_PORT=8900
 
 # ============================================
 # TIMEZONE
