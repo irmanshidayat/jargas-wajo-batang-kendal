@@ -36,7 +36,7 @@ git add . && git commit -m "Update" && git push origin main
 ```
 
 **Development:**
-```powershell
+```powershell.
 git checkout dev
 git add . && git commit -m "Update" && git push origin dev
 # Auto-deploy via GitHub Actions → https://devjargas.ptkiansantang.com
