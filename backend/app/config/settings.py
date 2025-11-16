@@ -12,11 +12,11 @@ def _get_env_file() -> str | None:
     Auto-detect environment file berdasarkan priority:
     1. Jika di Docker, tidak perlu file .env (semua dari environment variables)
     2. ENV_FILE environment variable (jika di-set manual)
-    3. .env.dev di root project (untuk development lokal)
-    4. .env di root project (untuk production/default lokal)
+    3. .env.dev di root backend (untuk development lokal)
+    4. .env di root backend (untuk production/default lokal)
     
-    Note: Di Docker, semua environment variables di-pass dari docker-compose,
-    jadi tidak perlu membaca file .env di backend.
+    Note: Backend sekarang standalone, jadi .env ada di root backend (bukan root project).
+    Path dari backend/app/config/settings.py ke root backend: naik 3 level.
     """
     # Priority 1: Jika di Docker, tidak perlu file .env
     if os.path.exists("/.dockerenv") or os.getenv("DOCKER_CONTAINER") == "true":
@@ -27,17 +27,17 @@ def _get_env_file() -> str | None:
     if env_file_from_env:
         return env_file_from_env
     
-    # Priority 3: Check .env.dev di root project (untuk development lokal)
-    # Path relatif dari backend/ ke root: ../.env.dev
-    root_env_dev = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env.dev")
-    if os.path.exists(root_env_dev):
-        return root_env_dev
+    # Priority 3: Check .env.dev di root backend (untuk development lokal)
+    # Path dari backend/app/config/settings.py ke root backend: naik 3 level
+    backend_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    backend_env_dev = os.path.join(backend_root, ".env.dev")
+    if os.path.exists(backend_env_dev):
+        return backend_env_dev
     
-    # Priority 4: Default to .env di root project (untuk production/default lokal)
-    # Path relatif dari backend/ ke root: ../.env
-    root_env = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
-    if os.path.exists(root_env):
-        return root_env
+    # Priority 4: Default to .env di root backend (untuk production/default lokal)
+    backend_env = os.path.join(backend_root, ".env")
+    if os.path.exists(backend_env):
+        return backend_env
     
     # Jika tidak ada file .env, return None (akan menggunakan environment variables atau defaults)
     return None
@@ -64,7 +64,8 @@ class Settings(BaseSettings):
     PORT: int = 8000
 
     # CORS - parse dari env string ke list
-    CORS_ORIGINS: Union[str, List[str]] = "http://localhost:8080,http://localhost:3000,http://localhost:5173"
+    # Default include port FE Docker: 8900 (prod), 8910 (dev), dan Vite dev server
+    CORS_ORIGINS: Union[str, List[str]] = "http://localhost:8080,http://localhost:3000,http://localhost:5173,http://localhost:8900,http://localhost:8910"
     
     # File Upload
     UPLOAD_DIR: str = "uploads/evidence"
