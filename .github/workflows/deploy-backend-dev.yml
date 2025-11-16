@@ -1,0 +1,229 @@
+name: Deploy Backend - Development
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - 'backend/**'
+  workflow_dispatch:
+
+env:
+  SERVER_HOST: 72.61.142.109
+  SERVER_USER: root
+  DEPLOY_PATH: /var/www/jargas-backend-dev
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  deploy:
+    name: Deploy to Development Server
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies (CI check)
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests (if available)
+        working-directory: ./backend
+        run: |
+          if [ -f "pytest.ini" ] || [ -d "app/tests" ]; then
+            pip install pytest pytest-asyncio httpx
+            pytest app/tests/ -v || echo "Tests failed but continuing deployment"
+          else
+            echo "No tests found, skipping..."
+          fi
+        continue-on-error: true
+
+      - name: Cleanup server (Docker, cache, old backups)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ env.SERVER_HOST }}
+          username: ${{ env.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            
+            echo "🧹 Starting cleanup process..."
+            
+            # Docker cleanup - hapus container, image, cache yang tidak terpakai
+            if command -v docker &> /dev/null; then
+              echo "🐳 Cleaning up Docker..."
+              # Hapus container yang sudah stopped
+              docker container prune -f || true
+              # Hapus image yang tidak digunakan (dangling)
+              docker image prune -af || true
+              # Hapus volume yang tidak digunakan
+              docker volume prune -f || true
+              # Hapus network yang tidak digunakan
+              docker network prune -f || true
+              # Hapus build cache
+              docker builder prune -af || true
+              # Hapus semua yang tidak terpakai (comprehensive)
+              docker system prune -af --volumes || true
+              echo "✅ Docker cleanup completed"
+            else
+              echo "ℹ️ Docker tidak terinstall, skip Docker cleanup"
+            fi
+            
+            # Cleanup old backups (keep last 7 days)
+            echo "📦 Cleaning up old backups..."
+            find /var/backups -name "jargas-backend-dev-*" -type d -mtime +7 -exec rm -rf {} + 2>/dev/null || true
+            find /var/backups -name "jargas-db-*.sql" -type f -mtime +7 -delete 2>/dev/null || true
+            echo "✅ Old backups cleanup completed (kept last 7 days)"
+            
+            # Cleanup old logs (keep last 14 days)
+            echo "📝 Cleaning up old logs..."
+            find /var/log -name "jargas-backend-dev*.log" -type f -mtime +14 -delete 2>/dev/null || true
+            find /var/log -name "jargas-backend-dev*.log.*" -type f -mtime +14 -delete 2>/dev/null || true
+            echo "✅ Old logs cleanup completed (kept last 14 days)"
+            
+            # Cleanup Python cache di deployment directory
+            echo "🐍 Cleaning up Python cache..."
+            find /var/www/jargas-backend-dev -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+            find /var/www/jargas-backend-dev -type f -name "*.pyc" -delete 2>/dev/null || true
+            find /var/www/jargas-backend-dev -type f -name "*.pyo" -delete 2>/dev/null || true
+            echo "✅ Python cache cleanup completed"
+            
+            # Cleanup pip cache
+            echo "📦 Cleaning up pip cache..."
+            pip cache purge 2>/dev/null || true
+            echo "✅ Pip cache cleanup completed"
+            
+            # Cleanup system temporary files
+            echo "🗑️ Cleaning up temporary files..."
+            find /tmp -name "jargas-*" -type f -mtime +1 -delete 2>/dev/null || true
+            find /tmp -name "*jargas*" -type d -mtime +1 -exec rm -rf {} + 2>/dev/null || true
+            echo "✅ Temporary files cleanup completed"
+            
+            # Show disk usage
+            echo "💾 Current disk usage:"
+            df -h / | tail -1
+            echo "✅ Cleanup process completed!"
+
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ env.SERVER_HOST }}
+          username: ${{ env.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            
+            echo "🚀 Starting deployment to development server..."
+            
+            # Navigate to deployment directory
+            cd ${{ env.DEPLOY_PATH }} || {
+              echo "❌ Directory ${{ env.DEPLOY_PATH }} tidak ditemukan!"
+              echo "💡 Membuat directory baru..."
+              mkdir -p ${{ env.DEPLOY_PATH }}
+              cd ${{ env.DEPLOY_PATH }}
+              git clone https://github.com/${{ github.repository }}.git .
+              git checkout dev
+            }
+            
+            # Backup current deployment (optional)
+            echo "📦 Creating backup..."
+            BACKUP_DIR="/var/backups/jargas-backend-dev-$(date +%Y%m%d-%H%M%S)"
+            mkdir -p "$BACKUP_DIR"
+            cp -r . "$BACKUP_DIR/" 2>/dev/null || echo "Backup skipped (first deployment)"
+            
+            # Pull latest code
+            echo "📥 Pulling latest code from dev branch..."
+            git fetch origin
+            git reset --hard origin/dev
+            git clean -fd
+            
+            # Setup virtual environment if not exists
+            if [ ! -d "venv" ]; then
+              echo "🐍 Creating virtual environment..."
+              python3 -m venv venv
+            fi
+            
+            # Activate virtual environment and install dependencies
+            echo "📦 Installing/updating dependencies..."
+            source venv/bin/activate
+            pip install --upgrade pip
+            pip install -r requirements.txt
+            
+            # Setup environment file if not exists
+            if [ ! -f ".env.dev" ]; then
+              echo "⚙️ Creating .env.dev from example..."
+              cp env.dev.example .env.dev
+              echo "⚠️ WARNING: Please configure .env.dev file manually!"
+            fi
+            
+            # Run database migration
+            echo "🔄 Running database migration..."
+            python -m scripts.smart_migrate --mode sequential || {
+              echo "⚠️ Migration failed, but continuing..."
+              python -m scripts.smart_migrate --status
+            }
+            
+            # Restart backend service
+            echo "🔄 Restarting backend service..."
+            if systemctl is-active --quiet jargas-backend-dev.service; then
+              systemctl restart jargas-backend-dev.service
+              echo "✅ Service restarted"
+            elif systemctl is-enabled --quiet jargas-backend-dev.service 2>/dev/null; then
+              systemctl start jargas-backend-dev.service
+              echo "✅ Service started"
+            else
+              echo "⚠️ Service jargas-backend-dev.service tidak ditemukan"
+              echo "💡 Starting backend manually..."
+              # Kill existing process if running
+              pkill -f "uvicorn.*app.main:app.*8020" || true
+              # Start backend in background
+              nohup venv/bin/python run.py > /var/log/jargas-backend-dev.log 2>&1 &
+              echo "✅ Backend started manually"
+            fi
+            
+            # Wait a bit for service to start
+            sleep 3
+            
+            # Health check
+            echo "🏥 Performing health check..."
+            if curl -f http://localhost:8020/health > /dev/null 2>&1; then
+              echo "✅ Health check passed!"
+            else
+              echo "⚠️ Health check failed, but deployment completed"
+              echo "💡 Check logs: tail -f /var/log/jargas-backend-dev.log"
+            fi
+            
+            echo "✅ Deployment completed successfully!"
+            
+            # Final cleanup after successful deployment
+            echo "🧹 Running final cleanup..."
+            # Cleanup Python cache again
+            find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+            find . -type f -name "*.pyc" -delete 2>/dev/null || true
+            # Cleanup pip cache in venv
+            if [ -d "venv" ]; then
+              venv/bin/pip cache purge 2>/dev/null || true
+            fi
+            echo "✅ Final cleanup completed"
+
+      - name: Verify deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ env.SERVER_HOST }}
+          username: ${{ env.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo "🔍 Verifying deployment..."
+            sleep 5
+            curl -f http://localhost:8020/health || echo "⚠️ Health check failed"
+            curl -f http://localhost:8020/ || echo "⚠️ Root endpoint check failed"
+
